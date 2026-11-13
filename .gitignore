@@ -1,0 +1,7 @@
+node_modules/
+app/data/
+*.orig
+*.patch*
+*.zip
+node/
+.DS_Store

@@ -1,0 +1,20 @@
+#!/bin/bash
+# 예배송출 실행기 — 만든 사람: 쉬운목사 이광복
+R="$(cd "$(dirname "$0")/../Resources" && pwd)"
+export WC_DATA_DIR="$HOME/Library/Application Support/WorshipCaster"
+LOG="$HOME/Library/Logs/WorshipCaster.log"
+mkdir -p "$WC_DATA_DIR" "$(dirname "$LOG")"
+cd "$R/app" || exit 1
+# 서버가 운영 화면을 직접 엽니다. 이미 켜져 있으면 창만 다시 엽니다.
+# 애플 칩(M1~)이면 애플 칩용으로 바로 실행 (안 그러면 인텔용으로 번역되며 첫 실행이 느려짐)
+if [ "$(sysctl -n hw.optional.arm64 2>/dev/null)" = "1" ]; then RUN=(arch -arm64); else RUN=(); fi
+nohup "${RUN[@]}" "$R/node/node" server.js >>"$LOG" 2>&1 &
+PID=$!
+for i in $(seq 1 50); do
+  curl -s -m 1 http://localhost:5300/api/me >/dev/null 2>&1 && exit 0
+  kill -0 $PID 2>/dev/null || break
+  sleep 0.2
+done
+curl -s -m 1 http://localhost:5300/api/me >/dev/null 2>&1 && exit 0
+osascript -e "display alert \"예배송출\" message \"프로그램을 시작하지 못했습니다. 기록 파일: $LOG\" as critical" >/dev/null 2>&1
+exit 1

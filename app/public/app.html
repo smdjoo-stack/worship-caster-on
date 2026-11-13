@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>예배송출</title>
+<link rel="stylesheet" href="/render.css">
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<div id="login" class="login hidden">
+  <form id="loginForm" class="card">
+    <h2>예배송출 웹 편집기</h2>
+    <p class="muted">운영 맥에서 정한 PIN을 입력하세요.</p>
+    <input id="pin" type="password" inputmode="numeric" placeholder="PIN" autocomplete="current-password">
+    <button class="btn primary">들어가기</button>
+    <p id="loginErr" class="err"></p>
+    <p class="muted small">예배송출 · 만든 사람: 쉬운목사 이광복</p>
+  </form>
+</div>
+
+<header class="top">
+  <div class="brand"><img class="brand-mark mark-light" src="/img/mark-light.png" alt="온교회"><img class="brand-mark mark-dark" src="/img/mark-dark.png" alt="온교회">예배송출 <span id="modeTag" class="tag"></span></div>
+  <div class="grow"></div>
+  <div class="ctrl-only">
+    <button class="btn" data-open="/output">📺 예배당 화면 열기</button>
+    <button class="btn" data-open="/stage">🎤 프롬프터 열기</button>
+    <button class="btn" id="obsBtn">🎥 OBS 자막 주소</button>
+  </div>
+  <div class="szbar" title="글자 크기 — 단축키 [ ] (예배당), Shift+[ ] (방송 자막)">
+    <span class="szbar-l">📺 TV 글자</span><button class="btn sm sz-b" data-sz="main" data-d="-1">A−</button><b class="sz-v" data-szv="main">100%</b><button class="btn sm sz-b" data-sz="main" data-d="1">A+</button>
+    <span class="szbar-l">🎥 방송 글자</span><button class="btn sm sz-b" data-sz="overlay" data-d="-1">A−</button><b class="sz-v" data-szv="overlay">100%</b><button class="btn sm sz-b" data-sz="overlay" data-d="1">A+</button>
+  </div>
+  <button class="btn" id="styleBtn">🎨 자막 스타일</button>
+  <button class="btn" id="mediaBtn">🖼 미디어</button>
+  <button class="btn ctrl-only" id="settingsBtn">⚙︎ 설정</button>
+  <button class="btn ctrl-only danger" id="quitBtn" title="프로그램 종료">⏻ 종료</button>
+</header>
+
+<main class="layout">
+  <aside class="left">
+    <section>
+      <div class="row">
+        <select id="serviceSel" class="grow"></select>
+        <button class="icon" id="svcNew" title="새 예배 순서">＋</button>
+        <button class="icon" id="svcEdit" title="이름·날짜 변경">✎</button>
+        <button class="icon" id="svcDel" title="예배 순서 삭제">🗑</button>
+      </div>
+      <ol id="serviceList" class="list"></ol>
+    </section>
+    <section class="lib">
+      <div class="row"><b class="grow">자료실</b></div>
+      <div class="row wrap">
+        <button class="btn sm" id="newSong">＋ 찬양</button>
+        <button class="btn sm" id="newBible">＋ 성경</button>
+        <button class="btn sm" id="newNotice">＋ 광고</button>
+        <label class="btn sm">＋ PPT<input type="file" id="pptFile" accept=".pptx" hidden></label>
+        <button class="btn sm" id="newScore">＋ PDF·악보</button>
+        <label class="btn sm" title="직접 만든 HTML 슬라이드 (한 파일에 여러 장)">＋ HTML<input type="file" id="htmlFile" accept=".html,.htm,text/html" multiple hidden></label>
+      </div>
+      <div class="seg" id="libCats"></div>
+      <input id="search" placeholder="자료 검색">
+      <ul id="libList" class="list"></ul>
+    </section>
+  </aside>
+
+  <section class="center">
+    <div class="center-main">
+      <div class="row head">
+        <h2 id="itemTitle" class="grow">자료를 선택하세요</h2>
+        <button class="btn" id="editItem" disabled>✎ 편집</button>
+      </div>
+      <div id="slides" class="grid"></div>
+    </div>
+    <!-- 미디어 칸: 누르면 예배당 화면 배경으로 계속 나옴 (영상은 소리 없이 반복) -->
+    <div class="mbin ctrl-only">
+      <div class="mbin-head">
+        <b>🎞 미디어</b>
+        <div class="seg mbin-seg" id="mbFilter">
+          <button data-f="all" class="on">전체</button><button data-f="video">영상</button><button data-f="image">사진</button>
+        </div>
+        <span id="mbLive" class="mbin-live muted">배경 없음</span>
+        <div class="grow"></div>
+        <input type="range" id="mbSize" min="110" max="260" step="10" value="170" title="미리보기 크기">
+        <label class="btn sm">＋ 올리기<input type="file" id="mbUp" multiple accept="image/png,image/jpeg,image/gif,image/webp,image/bmp,video/*" hidden></label>
+        <select id="mbFit" class="mbin-fit" title="배경 크기 맞춤">
+          <option value="auto">맞춤: 자동</option><option value="cover">꽉 채우기</option><option value="contain">전체 보이기</option><option value="small">작게 (로고)</option>
+        </select>
+        <button class="btn sm toggle" id="mbObs" title="미디어 배경을 방송(OBS)에도 똑같이 내보내기">🎥 방송에도</button>
+        <button class="btn sm" id="mbOff" title="예배당 화면의 미디어 배경 끄기">⏹ 배경 끄기</button>
+      </div>
+      <div id="mbGrid" class="mbin-grid"></div>
+    </div>
+  </section>
+
+  <aside class="right ctrl-only">
+    <section class="rp rp-tv">
+      <div class="pv-label"><span class="rp-tag">📺 예배당 화면</span> <span id="liveInfo" class="muted"></span><span class="sz" title="예배당 화면 글자 크기 ( [ / ] 키 )"><button class="sz-b" data-sz="main" data-d="-1">A−</button><b id="sz_main">-</b><button class="sz-b" data-sz="main" data-d="1">A+</button></span></div>
+      <div id="pvMain" class="wc-screen pv"></div>
+    </section>
+    <section class="rp rp-obs">
+      <div class="pv-label"><span class="rp-tag">🎥 방송 자막 (OBS)</span> <span id="ovState" class="ov-off hidden">꺼짐 — 예배당 화면에만 나가는 중</span><span class="sz" title="방송 자막 글자 크기 ( Shift+[ / Shift+] 키 )"><button class="sz-b" data-sz="overlay" data-d="-1">A−</button><b id="sz_overlay">-</b><button class="sz-b" data-sz="overlay" data-d="1">A+</button></span></div>
+      <div id="pvOverlay" class="wc-screen pv checker"></div>
+      <div class="ovq" title="바꾸면 바로 방송에 적용됩니다">
+        <label>미디어 배경</label>
+        <label class="ovq-chk"><input type="checkbox" id="ovMediaObs"> 방송에도 똑같이 내보내기</label>
+        <label>방송에 이미지</label>
+        <select data-ov="media"><option value="none">내보내지 않음 (자막만)</option><option value="full">화면 가득</option><option value="pip">화면 일부 (설교자 보이게)</option></select>
+        <label class="pip-only">일부 — 크기</label>
+        <div class="row pip-only"><input type="range" data-ov="pipSize" min="15" max="70" step="1"><span class="ovq-v" data-ovv="pipSize"></span></div>
+        <label class="pip-only">일부 — 위치</label>
+        <select class="pip-only" data-ov="pipPos"><option value="tr">오른쪽 위</option><option value="mr">오른쪽 중간</option><option value="br">오른쪽 아래</option><option value="tl">왼쪽 위</option><option value="ml">왼쪽 중간</option><option value="bl">왼쪽 아래</option></select>
+        <label>자막 위치</label>
+        <select data-ov="position"><option value="bottom">아래</option><option value="top">위</option></select>
+        <label>바 불투명도</label>
+        <div class="row"><input type="range" data-ov="boxOpacity" min="0" max="1" step="0.05"><span class="ovq-v" data-ovv="boxOpacity"></span></div>
+        <label>곡명·구절 표시</label>
+        <input type="checkbox" data-ov="showTitle">
+      </div>
+    </section>
+    <section class="rp rp-ctl">
+    <div class="pv-label"><span class="rp-tag">🎛 송출 조작</span></div>
+    <div class="controls">
+      <button class="btn big" id="prev">◀ 이전</button>
+      <button class="btn big primary" id="next">다음 ▶</button>
+      <button class="btn toggle" id="black">■ 검은화면 <kbd>B</kbd></button>
+      <button class="btn toggle" id="clear">◻ 글자 지우기 <kbd>C</kbd></button>
+      <button class="btn toggle" id="logo">✝ 로고 <kbd>L</kbd></button>
+      <button class="btn" id="reset">모두 끄기 <kbd>Esc</kbd></button>
+      <button class="btn toggle wide" id="overlayOff" title="예배당 TV에는 그대로 나가고, 유튜브(OBS)에만 자막을 끕니다">🎥 방송 자막 끄기 <kbd>O</kbd></button>
+    </div>
+    </section>
+    <section class="rp rp-next">
+      <div class="pv-label"><span class="rp-tag">⏭ 다음 슬라이드</span></div>
+      <div id="pvNext" class="next-text muted"></div>
+    </section>
+    <p class="muted small rp-help">단축키: → Space 다음 · ← 이전 · 숫자키 1~9 슬라이드 · O 방송 자막 끄기 · [ ] 글자 크기 (Shift: 방송 자막)</p>
+  </aside>
+</main>
+
+<dialog id="dlg"><div id="dlgBody"></div></dialog>
+<div id="toast"></div>
+
+<script src="/render.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>
