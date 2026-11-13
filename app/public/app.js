@@ -28,7 +28,17 @@ const service = () => S.services.find(s => s.id === S.currentServiceId);
 async function reload() {
   S = await api('GET', '/api/state');
   if (!snap) snap = S.live;
+  renderBrand();
   renderAll();
+}
+// 맨 위 '예배송출' 앞 로고: ⚙︎ 설정 → 타이틀 로고 (없으면 ✝)
+function renderBrand() {
+  const url = S?.settings?.titleLogo || '';
+  const old = $('#brandMark');
+  if ((old.dataset.url || '') === url) return;
+  const el = url ? Object.assign(document.createElement('img'), { className: 'brand-mark', src: url, alt: '' }) : Object.assign(document.createElement('span'), { className: 'brand-cross', textContent: '✝' });
+  el.id = 'brandMark'; el.dataset.url = url;
+  old.replaceWith(el);
 }
 
 // ── 화면 그리기 ─────────────────────────────────
@@ -825,6 +835,8 @@ function openSettings() {
     <div class="form">
       <label>웹 편집기 PIN</label><div class="row"><input id="stPin" value="${esc(S.settings.pin || '')}" maxlength="12" placeholder="6~12자리"><button class="btn" id="stPinSave">저장</button></div>
       <label>로고 (L 키)</label><div class="row">${S.settings.logo ? `<img src="${esc(S.settings.logo)}" style="height:40px">` : '<span class="muted">없음</span>'}<button class="btn" id="stLogo">로고 선택</button></div>
+      <label>타이틀 로고</label><div class="row">${S.settings.titleLogo ? `<img src="${esc(S.settings.titleLogo)}" style="height:28px">` : '<span class="muted">✝ (기본)</span>'}<button class="btn" id="stTitleLogo">로고 선택</button>${S.settings.titleLogo ? '<button class="btn" id="stTitleLogoOff">✝ 로 되돌리기</button>' : ''}
+        <span class="muted small">운영 화면 맨 위 '예배송출' 앞에 붙는 작은 로고</span></div>
       <label>성경 폴더</label><div>
         <div id="stFolders"></div>
         <div class="row"><input id="stFolderNew" placeholder="폴더 경로 (Finder에서 폴더를 이 칸으로 끌어다 놓아도 됩니다)"><button class="btn" id="stFolderAdd">추가</button></div>
@@ -847,6 +859,12 @@ function openSettings() {
   body.querySelector('#stFolderAdd').onclick = () => { const v = nf.value.trim().replace(/^['"]|['"]$/g, ''); if (v) saveFolders([...folders, v]); };
   body.querySelector('#stPinSave').onclick = async () => { await api('PUT', '/api/settings', { pin: body.querySelector('#stPin').value }); toast('PIN을 바꿨습니다 (기존 접속은 로그아웃)'); };
   body.querySelector('#stLogo').onclick = () => openMediaPicker(async url => { await api('PUT', '/api/settings', { logo: url }); await reload(); openSettings(); }, openSettings);
+  body.querySelector('#stTitleLogo').onclick = () => openMediaPicker(async url => {
+    if (/\.(mp4|mov|m4v|webm|mp3|m4a|wav|aac)$/i.test(url)) { toast('타이틀 로고는 사진 파일만 됩니다'); return openSettings(); }
+    await api('PUT', '/api/settings', { titleLogo: url }); await reload(); openSettings();
+  }, openSettings);
+  const tlOff = body.querySelector('#stTitleLogoOff');
+  if (tlOff) tlOff.onclick = async () => { await api('PUT', '/api/settings', { titleLogo: '' }); await reload(); openSettings(); };
   body.querySelector('#stBFile').onchange = async e => {
     const fd = new FormData(); fd.append('file', e.target.files[0]); fd.append('name', body.querySelector('#stBName').value || e.target.files[0].name);
     const r = await api('POST', '/api/bible/upload', fd);

@@ -147,7 +147,7 @@ app.get('/api/me', (req, res) => res.json({ authed: authed(req), local: isLocal(
 app.get('/api/state', needAuth, (req, res) => {
   res.json({
     items: db.items, services: db.services, currentServiceId: db.currentServiceId,
-    style: db.style, settings: isLocal(req) ? db.settings : { logo: db.settings.logo },
+    style: db.style, settings: isLocal(req) ? db.settings : { logo: db.settings.logo, titleLogo: db.settings.titleLogo || '' },
     bibleVersions: bible.versionNames(), bibleDefault: bible.defaultVersion(), lan: lanAddresses(), port: PORT, live: snapshot(),
   });
 });
@@ -226,6 +226,8 @@ app.put('/api/settings', needLocal, (req, res) => {
     db.settings.pin = pin;
   }
   if (req.body.logo != null) db.settings.logo = req.body.logo;
+  // 운영 화면 맨 위 '예배송출' 앞에 붙는 교회 로고 (비우면 ✝)
+  if (req.body.titleLogo != null) db.settings.titleLogo = /^\/media\/[^/\\]+\.(png|jpe?g|gif|webp|svg)$/i.test(req.body.titleLogo) ? req.body.titleLogo : '';
   if (req.body.pin != null) sessions.clear();
   changed(); pushLive(); res.json({ ok: true });
 });
