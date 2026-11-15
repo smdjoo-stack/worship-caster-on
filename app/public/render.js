@@ -64,12 +64,19 @@
     return parts.join(',') || 'none';
   }
 
-  function elementsHTML(slide) {
+  // 자막 끄기(C) 중 설정이 '이미지도 같이 끄기'면 이미지 숨기기(I)와 똑같이 이미지를 뺌
+  // 예배당 자막만 끄기(tvOff)도 같은 설정을 따름
+  const textOff = L => !!L?.clear || !!L?.tvOff;
+  const imagesOff = snap => !!snap.live?.noImage || (textOff(snap.live) && snap.clearImages === 'hide');
+  const mediaOff = snap => textOff(snap.live) && snap.clearImages === 'hide';
+
+  function elementsHTML(slide, noImage = false, imagesOnly = false) {
     const ptH = num(slide.ptH, 540, 1, 1e5);
     return (slide.elements || []).map(e0 => {
       const e = safeEl(e0);
       const box = `left:${e.x}%;top:${e.y}%;width:${e.w}%;height:${e.h}%`;
-      if (e.type === 'image') return `<img class="wc-el" style="${box};object-fit:contain" src="${esc(e.src)}">`;
+      if (e.type === 'image') return noImage ? '' : `<img class="wc-el" style="${box};object-fit:contain" src="${esc(e.src)}">`;
+      if (imagesOnly) return ''; // 자막 끄기 + 이미지 계속 보이기: PPT 속 글자·표만 뺌
       const fs = ((e.size || 24) / ptH * 100).toFixed(2) + 'cqh';
       if (e.type === 'table') {
         return `<table class="wc-el wc-table" style="${box};font-size:${fs};color:${e.color}">` +
@@ -81,18 +88,21 @@
   }
 
   // mediaUnder: 미디어 배경(L.mediaBg)이 따로 깔려 있으면 슬라이드 바탕을 투명하게 해서 그 위에 글자만 얹음
+  // [추가] L.noImage(이미지 OFF): 사진·악보·PPT 속 그림만 빼고 글자는 그대로. 미디어 배경(영상)은 계속 나옴
+  // (미디어 배경까지 끄는 건 '자막 끄기 + 이미지도 같이 끄기' 설정일 때만)
   function mainHTML(snap, mediaUnder = false) {
-    const st = safeMain(snap.style.main), s = snap.slide, L = snap.live;
-    if (L.black || (!s && !(mediaUnder && L.mediaBg))) {
+    const st = safeMain(snap.style.main), s = snap.slide, L = snap.live, noImg = imagesOff(snap);
+    const media = mediaUnder && L.mediaBg && !mediaOff(snap);
+    if (L.black || (!s && !media)) {
       const logo = L.logo && snap.logo ? `<div class="wc-bg" style="background-image:url('${esc(snap.logo)}');background-size:contain;background-position:center;background-repeat:no-repeat;inset:20%"></div>` : '';
       return `<div class="wc-layer" style="background:#000">${logo}</div>`;
     }
     if (!s) return '<div class="wc-layer"></div>';
-    const under = mediaUnder && L.mediaBg && !s.bg;
-    let inner = bgHTML(s.bg, s.fit !== 'contain');
-    if (!L.clear) {
+    const under = media && (!s.bg || noImg); // 이미지를 껐으면 슬라이드 그림 대신 배경 영상이 보이게
+    let inner = noImg ? '' : bgHTML(s.bg, s.fit !== 'contain');
+    if (!textOff(L)) {
       if (isHtml(s)) inner += htmlSlideHTML(s);
-      else if (s.elements && s.elements.length) inner += elementsHTML(s);
+      else if (s.elements && s.elements.length) inner += elementsHTML(s, noImg);
       else {
         const jc = { top: 'flex-start', middle: 'center', bottom: 'flex-end' }[st.valign] || 'center';
         const ref = s.ref ? `<div class="wc-ref" style="font-size:${(st.size * 0.6).toFixed(2)}cqh">${esc(s.ref)}</div>` : '';
@@ -100,8 +110,14 @@
           <div class="wc-text-main" dir="auto" style="font-family:${st.font};font-size:${st.size}cqh;color:${st.color};font-weight:${st.bold ? 700 : 400};
             line-height:${st.lineHeight};text-shadow:${textShadow(st)};${st.strokeWidth ? `-webkit-text-stroke:${st.strokeWidth / 10}cqh ${st.stroke};paint-order:stroke fill;` : ''}">${esc(s.text).replace(/\n/g, '<br>')}</div>${ref}</div>`;
       }
+    } else if (!noImg && !isHtml(s) && s.elements && s.elements.length) {
+      inner += elementsHTML(s, false, true); // 자막은 끄고 PPT·악보 속 그림은 남김
     }
-    return `<div class="wc-layer" style="background:${under ? 'transparent' : col(s.bgColor, st.bg)}">${inner}</div>`;
+    // 이미지를 끈 사진·악보 장은 올릴 때 고른 바탕색(흰색 등)만 남아 어색함 → 자막 스타일 배경(기본 검정)으로
+    // 글자가 있는 PPT 장은 글자가 잘 보이도록 원래 바탕색 유지
+    const hasText = String(s.text || '').trim() || (s.elements || []).some(e => e && e.type !== 'image');
+    const bgc = noImg && !hasText ? st.bg : col(s.bgColor, st.bg);
+    return `<div class="wc-layer" style="background:${under ? 'transparent' : bgc}">${inner}</div>`;
   }
 
   // 미디어 배경: 슬라이드 층과 따로 두어서 슬라이드가 바뀌어도 영상이 처음부터 다시 시작하지 않음
@@ -147,8 +163,9 @@
     if (L.black || L.clear || L.overlayOff || snap.item?.noBroadcast || !s) return '<div class="wc-layer"></div>';
     // [패치] 이미지·악보·HTML·PPT 슬라이드를 방송에도 내보내기 (자막 스타일의 '방송에 이미지' 설정)
     const visual = isHtml(s) || (s.elements && s.elements.length) || (s.bg && !String(s.text || '').trim());
-    if (visual && st.media !== 'none') {
-      const inner = mainHTML(snap);
+    if (visual && st.media !== 'none' && !L.ovNoImage) { // 방송 이미지 OFF면 이미지는 빼고 글자 자막만
+      // 이미지 숨기기는 예배당 화면 전용 — 방송은 '방송에 이미지' 설정을 따름
+      const inner = mainHTML({ ...snap, live: { ...L, noImage: false, tvOff: false } }); // 예배당 자막 끄기는 방송에 영향 없음
       if (st.media === 'full') return inner;
       // 원래 크기로 그린 뒤 축소 → 글자·HTML 비율이 그대로 유지됨
       // 위치: t 위 / m 중간 / b 아래 × r 오른쪽 / l 왼쪽
@@ -169,7 +186,7 @@
   function stageHTML(snap) {
     const s = snap.slide, n = snap.next, L = snap.live;
     const now = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
-    const status = (L.black ? '■ 검은 화면' : L.clear ? '◻ 글자 지움' : '● 송출 중') +
+    const status = (L.black ? '■ 검은 화면' : L.clear ? '◻ 모든 자막 꺼짐' : L.tvOff ? '📺 예배당 자막 꺼짐' : '● 송출 중') + (L.noImage ? ' · 이미지 숨김' : '') +
       (L.overlayOff || snap.item?.noBroadcast ? ' · 방송 자막 꺼짐' : '');
     return `<div class="wc-layer wc-stage">
       <div class="wc-st-top"><span>${esc(snap.item?.title || '대기')}</span><span>${snap.item ? `${L.index + 1} / ${snap.item.count}` : ''}</span><span class="wc-st-status">${status}</span><span class="wc-clock">${now}</span></div>
@@ -184,7 +201,7 @@
   function render(container, snap, mode, opts = {}) {
     const withMedia = mode === 'main' && opts.media !== false;
     const L = snap.live || {};
-    if (withMedia) syncMedia(container, L.mediaBg, L.mediaFit);
+    if (withMedia) syncMedia(container, mediaOff(snap) ? null : L.mediaBg, L.mediaFit);
     // 방송(OBS)에도 미디어 배경: '방송에도' 가 켜져 있고, 검은화면·방송 자막 끄기가 아닐 때만
     if (mode === 'overlay' && opts.media !== false) syncMedia(container, L.mediaObs && !L.black && !L.overlayOff ? L.mediaBg : null, L.mediaFit);
     const raw = withMedia ? mainHTML(snap, true) : RENDER[mode](snap);

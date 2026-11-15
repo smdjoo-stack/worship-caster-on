@@ -8,22 +8,37 @@ const unescape = s => String(s)
   .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCodePoint(parseInt(n, 16)))
   .replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&');
 
-async function get(url) {
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+async function get(url, retry = true) {
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), 8000);
+  let status = 0;
   try {
     const r = await fetch(url, { headers: { 'User-Agent': UA, 'Accept-Language': 'ko-KR,ko;q=0.9' }, signal: ctl.signal });
+    status = r.status;
     if (!r.ok) throw new Error('HTTP ' + r.status);
     return await r.text();
   } catch (e) {
+    // 429 = 짧은 시간에 너무 많이 요청함 → 잠깐 쉬었다가 한 번 더
+    if (status === 429 && retry) { clearTimeout(timer); await sleep(2000); return get(url, false); }
+    if (status === 429) throw new Error('가사 사이트(벅스)가 잠시 요청을 막았습니다. 1~2분 뒤 다시 누르거나 [구글]·[네이버]로 찾아 주세요.');
     throw new Error(e.name === 'AbortError' ? '응답이 너무 느립니다 (인터넷 연결 확인)' : '가사 사이트에 연결하지 못했습니다: ' + e.message);
   } finally { clearTimeout(timer); }
 }
 
-// 곡 검색 → [{ id, title, artist }]
-async function search(q, limit = 20) {
-  q = String(q || '').trim().slice(0, 100);
-  if (!q) return [];
+// 제목 정리: 벅스는 '(G)', '가사', '[찬송가]' 같은 군더더기가 붙으면 결과를 하나도 안 줌
+function cleanTitle(q) {
+  return String(q || '')
+    .replace(/\([^)]*\)|\[[^\]]*\]|\{[^}]*\}|<[^>]*>|（[^）]*）/g, ' ')      // 괄호 안 (키·메모·영문 제목)
+    .replace(/^\s*\d+\s*[.)\-:]\s*/, ' ')                                   // 앞 번호 "1. "
+    .replace(/(가사|악보|코드|ppt|PPT|mr|MR|반주|찬양|찬송가?|\d+\s*장)(?=\s|$)/g, ' ') // 붙은 말
+    .replace(/\b[A-G][#b]?m?(\s*key|\s*키)?(?=\s|$)/g, ' ')                  // 키 표기 "G", "Ab key"
+    .replace(/[~!@#$%^&*_=+|\\/;:"“”‘’'`,.?·…\-]+/g, ' ')
+    .replace(/\s+/g, ' ').trim();
+}
+
+async function searchOnce(q, limit) {
   const html = await get(`${BASE}/search/track?q=${encodeURIComponent(q)}`);
   const out = [];
   const seen = new Set();
@@ -36,6 +51,19 @@ async function search(q, limit = 20) {
     if (out.length >= limit) break;
   }
   return out;
+}
+
+// 곡 검색 → [{ id, title, artist }]. 그대로 → 정리한 제목 → 띄어쓰기 없앤 제목 순으로 시도
+async function search(q, limit = 20) {
+  q = String(q || '').trim().slice(0, 100);
+  if (!q) return [];
+  const c = cleanTitle(q);
+  const tries = [...new Set([q, c, c.replace(/\s+/g, '')].filter(Boolean))];
+  for (const t of tries) {
+    const out = await searchOnce(t, limit);
+    if (out.length) return out;
+  }
+  return [];
 }
 
 // 가사 정리: 줄 끝 공백 제거, 빈 줄 여러 개 → 하나 (빈 줄 = 슬라이드 강제 나눔)
@@ -54,4 +82,4 @@ async function lyrics(id) {
   return { id: String(id), title: title.trim(), artist: artist.trim(), lyrics: x ? tidy(unescape(x[1])) : '' };
 }
 
-module.exports = { search, lyrics };
+module.exports = { search, lyrics, cleanTitle };
