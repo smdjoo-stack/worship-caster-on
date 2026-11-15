@@ -205,6 +205,8 @@ function renderLive() {
   WC.render($('#pvOverlay'), snap, 'overlay');
   const L = snap.live;
   for (const k of ['black', 'clear', 'logo', 'overlayOff']) $('#' + k).classList.toggle('on', !!L[k]);
+  $('#reset').classList.toggle('on', !!L.allOff);
+  $('#reset').innerHTML = (L.allOff ? '✖ 모두 꺼짐 · 다시 켜기' : '✖ 모두 끄기') + ' <kbd>Esc</kbd>';
   const ovOff = L.overlayOff || snap.item?.noBroadcast;
   // 직접 끈 경우는 아래 '자막 OFF' 버튼이 알려 줌. 자료 설정으로 방송에 안 나가는 경우만 짧게 표시
   $('#ovState').classList.toggle('hidden', L.overlayOff || !snap.item?.noBroadcast);
@@ -970,7 +972,7 @@ function bind() {
   $('#black').onclick = () => goLive({ black: !snap.live.black });
   $('#clear').onclick = () => goLive({ clear: !snap.live.clear });
   $('#logo').onclick = () => goLive({ logo: !snap.live.logo, black: !snap.live.logo });
-  $('#reset').onclick = () => goLive({ reset: true });
+  $('#reset').onclick = () => goLive({ allOff: !snap.live.allOff }); // 모두 끄기 ↔ 다시 켜기 (끄기 전 화면으로)
   $('#overlayOff').onclick = () => goLive({ overlayOff: !snap.live.overlayOff });
   $('#tvOff').onclick = () => goLive({ tvOff: !snap.live.tvOff });
   $('#ovToggle').onclick = () => $('#overlayOff').click(); // '🎥 방송 자막 끄기 (O)'와 같은 기능
