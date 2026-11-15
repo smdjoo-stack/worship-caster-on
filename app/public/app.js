@@ -968,8 +968,7 @@ function bind() {
     document.body.innerHTML = '<div style="display:grid;place-items:center;height:100vh;font-size:18px">예배송출을 종료했습니다. 이 창은 닫으셔도 됩니다.</div>';
     setTimeout(() => window.close(), 800);
   };
-  $('#prev').onclick = () => goLive({ step: -1 });
-  $('#next').onclick = () => goLive({ step: 1 });
+  // 이전·다음 버튼은 뺌 — 키보드 ← → / Space, 슬라이드 클릭으로 넘김
   $('#black').onclick = () => goLive({ black: !snap.live.black });
   $('#clear').onclick = () => goLive({ clear: !snap.live.clear });
   $('#logo').onclick = () => goLive({ logo: !snap.live.logo, black: !snap.live.logo });
