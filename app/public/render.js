@@ -186,7 +186,7 @@
   function stageHTML(snap) {
     const s = snap.slide, n = snap.next, L = snap.live;
     const now = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
-    const status = (L.black ? '■ 검은 화면' : L.clear ? '◻ 자막 꺼짐' : L.tvOff ? '📺 예배당 자막 꺼짐' : '● 송출 중') + (L.noImage ? ' · 이미지 숨김' : '') +
+    const status = (L.black ? '■ 검은 화면' : L.clear ? '◻ 모든 자막 꺼짐' : L.tvOff ? '📺 예배당 자막 꺼짐' : '● 송출 중') + (L.noImage ? ' · 이미지 숨김' : '') +
       (L.overlayOff || snap.item?.noBroadcast ? ' · 방송 자막 꺼짐' : '');
     return `<div class="wc-layer wc-stage">
       <div class="wc-st-top"><span>${esc(snap.item?.title || '대기')}</span><span>${snap.item ? `${L.index + 1} / ${snap.item.count}` : ''}</span><span class="wc-st-status">${status}</span><span class="wc-clock">${now}</span></div>

@@ -204,8 +204,7 @@ function renderLive() {
   WC.render($('#pvMain'), snap, 'main');
   WC.render($('#pvOverlay'), snap, 'overlay');
   const L = snap.live;
-  for (const k of ['black', 'clear', 'logo', 'noImage', 'overlayOff']) $('#' + k).classList.toggle('on', !!L[k]);
-  $('#noImage').innerHTML = (L.noImage ? '🖼 이미지 다시 보이기' : '🖼 이미지 숨기기') + ' <kbd>I</kbd>';
+  for (const k of ['black', 'clear', 'logo', 'overlayOff']) $('#' + k).classList.toggle('on', !!L[k]);
   const ovOff = L.overlayOff || snap.item?.noBroadcast;
   // 직접 끈 경우는 아래 '자막 OFF' 버튼이 알려 줌. 자료 설정으로 방송에 안 나가는 경우만 짧게 표시
   $('#ovState').classList.toggle('hidden', L.overlayOff || !snap.item?.noBroadcast);
@@ -224,7 +223,6 @@ function renderLive() {
   $('#tvOff').textContent = L.tvOff ? '자막 OFF' : '자막 ON';
   // 곡명은 빼고 몇 번째 장인지만 (좁은 칸에서 줄바꿈 안 되게)
   $('#liveInfo').textContent = snap.item ? `${L.index + 1}/${snap.item.count}` : '대기';
-  $('#pvNext').textContent = snap.next ? snap.next.text : (snap.item ? '— 마지막 슬라이드 —' : '');
 }
 
 function select(id) { selId = id; renderServices(); renderLib(); renderSlides(); }
@@ -863,7 +861,7 @@ function openSettings() {
       <label>로고 (L 키)</label><div class="row">${S.settings.logo ? `<img src="${esc(S.settings.logo)}" style="height:40px">` : '<span class="muted">없음</span>'}<button class="btn" id="stLogo">로고 선택</button></div>
       <label>타이틀 로고</label><div class="row">${S.settings.titleLogo ? `<img src="${esc(S.settings.titleLogo)}" style="height:28px">` : '<span class="muted">✝ (기본)</span>'}<button class="btn" id="stTitleLogo">로고 선택</button>${S.settings.titleLogo ? '<button class="btn" id="stTitleLogoOff">✝ 로 되돌리기</button>' : ''}
         <span class="muted small">운영 화면 맨 위 '예배송출' 앞에 붙는 작은 로고</span></div>
-      <label>자막 끄기 (C) 할 때 이미지</label><div class="row"><select id="stClearImages">
+      <label>모든 자막 끄기 (C) 할 때 이미지</label><div class="row"><select id="stClearImages">
           <option value="keep"${S.settings.clearImages !== 'hide' ? ' selected' : ''}>이미지는 계속 보이기 (사진·악보·배경 영상)</option>
           <option value="hide"${S.settings.clearImages === 'hide' ? ' selected' : ''}>이미지도 같이 끄기</option>
         </select><span class="muted small">고르면 바로 저장됩니다</span></div>
@@ -890,7 +888,7 @@ function openSettings() {
   body.querySelector('#stClearImages').onchange = async e => {
     await api('PUT', '/api/settings', { clearImages: e.target.value });
     S.settings.clearImages = e.target.value;
-    toast(e.target.value === 'hide' ? '자막 끄기 때 이미지도 같이 끕니다 (저장됨)' : '자막 끄기 때 이미지는 계속 보입니다 (저장됨)');
+    toast(e.target.value === 'hide' ? '모든 자막 끄기 때 이미지도 같이 끕니다 (저장됨)' : '모든 자막 끄기 때 이미지는 계속 보입니다 (저장됨)');
   };
   body.querySelector('#stPinSave').onclick = async () => { await api('PUT', '/api/settings', { pin: body.querySelector('#stPin').value }); toast('PIN을 바꿨습니다 (기존 접속은 로그아웃)'); };
   body.querySelector('#stLogo').onclick = () => openMediaPicker(async url => { await api('PUT', '/api/settings', { logo: url }); await reload(); openSettings(); }, openSettings);
@@ -972,12 +970,11 @@ function bind() {
   $('#black').onclick = () => goLive({ black: !snap.live.black });
   $('#clear').onclick = () => goLive({ clear: !snap.live.clear });
   $('#logo').onclick = () => goLive({ logo: !snap.live.logo, black: !snap.live.logo });
-  $('#noImage').onclick = () => goLive({ noImage: !snap.live.noImage });
   $('#reset').onclick = () => goLive({ reset: true });
   $('#overlayOff').onclick = () => goLive({ overlayOff: !snap.live.overlayOff });
   $('#tvOff').onclick = () => goLive({ tvOff: !snap.live.tvOff });
   $('#ovToggle').onclick = () => $('#overlayOff').click(); // '🎥 방송 자막 끄기 (O)'와 같은 기능
-  $('#tvImg').onclick = () => $('#noImage').click();        // '🖼 이미지 숨기기 (I)'와 같은 기능
+  $('#tvImg').onclick = () => goLive({ noImage: !snap.live.noImage }); // 예배당 이미지 ON/OFF (I 키)
   $('#ovImg').onclick = () => goLive({ ovNoImage: !snap.live.ovNoImage });
 
   addEventListener('keydown', e => {
@@ -988,7 +985,7 @@ function bind() {
     else if (k === 'b' || k === 'B') $('#black').click();
     else if (k === 'c' || k === 'C') $('#clear').click();
     else if (k === 'l' || k === 'L') $('#logo').click();
-    else if (k === 'i' || k === 'I') $(e.shiftKey ? '#ovImg' : '#noImage').click();
+    else if (k === 'i' || k === 'I') $(e.shiftKey ? '#ovImg' : '#tvImg').click();
     else if (k === 'o' || k === 'O') $('#overlayOff').click();
     else if (k === 't' || k === 'T') $('#tvOff').click();
     else if (k === 'Escape') $('#reset').click();
