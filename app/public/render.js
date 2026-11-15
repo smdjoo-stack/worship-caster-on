@@ -92,6 +92,7 @@
   // (미디어 배경까지 끄는 건 '자막 끄기 + 이미지도 같이 끄기' 설정일 때만)
   function mainHTML(snap, mediaUnder = false) {
     const st = safeMain(snap.style.main), s = snap.slide, L = snap.live, noImg = imagesOff(snap);
+    if (L.allOff) return '<div class="wc-layer" style="background:#000"></div>'; // 모두 끄기: 로고까지 아무것도 없음
     const media = mediaUnder && L.mediaBg && !mediaOff(snap);
     if (L.black || (!s && !media)) {
       const logo = L.logo && snap.logo ? `<div class="wc-bg" style="background-image:url('${esc(snap.logo)}');background-size:contain;background-position:center;background-repeat:no-repeat;inset:20%"></div>` : '';
@@ -160,7 +161,7 @@
 
   function overlayHTML(snap) {
     const st = safeOverlay(snap.style.overlay), s = snap.slide, L = snap.live;
-    if (L.black || L.clear || L.overlayOff || snap.item?.noBroadcast || !s) return '<div class="wc-layer"></div>';
+    if (L.allOff || L.black || L.clear || L.overlayOff || snap.item?.noBroadcast || !s) return '<div class="wc-layer"></div>';
     // [패치] 이미지·악보·HTML·PPT 슬라이드를 방송에도 내보내기 (자막 스타일의 '방송에 이미지' 설정)
     const visual = isHtml(s) || (s.elements && s.elements.length) || (s.bg && !String(s.text || '').trim());
     if (visual && st.media !== 'none' && !L.ovNoImage) { // 방송 이미지 OFF면 이미지는 빼고 글자 자막만
@@ -186,7 +187,7 @@
   function stageHTML(snap) {
     const s = snap.slide, n = snap.next, L = snap.live;
     const now = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
-    const status = (L.black ? '■ 검은 화면' : L.clear ? '◻ 모든 자막 꺼짐' : L.tvOff ? '📺 예배당 자막 꺼짐' : '● 송출 중') + (L.noImage ? ' · 이미지 숨김' : '') +
+    const status = (L.allOff ? '✖ 모두 꺼짐' : L.black ? '■ 검은 화면' : L.clear ? '◻ 모든 자막 꺼짐' : L.tvOff ? '📺 예배당 자막 꺼짐' : '● 송출 중') + (L.noImage ? ' · 이미지 숨김' : '') +
       (L.overlayOff || snap.item?.noBroadcast ? ' · 방송 자막 꺼짐' : '');
     return `<div class="wc-layer wc-stage">
       <div class="wc-st-top"><span>${esc(snap.item?.title || '대기')}</span><span>${snap.item ? `${L.index + 1} / ${snap.item.count}` : ''}</span><span class="wc-st-status">${status}</span><span class="wc-clock">${now}</span></div>
@@ -201,9 +202,9 @@
   function render(container, snap, mode, opts = {}) {
     const withMedia = mode === 'main' && opts.media !== false;
     const L = snap.live || {};
-    if (withMedia) syncMedia(container, mediaOff(snap) ? null : L.mediaBg, L.mediaFit);
+    if (withMedia) syncMedia(container, L.allOff || mediaOff(snap) ? null : L.mediaBg, L.mediaFit);
     // 방송(OBS)에도 미디어 배경: '방송에도' 가 켜져 있고, 검은화면·방송 자막 끄기가 아닐 때만
-    if (mode === 'overlay' && opts.media !== false) syncMedia(container, L.mediaObs && !L.black && !L.overlayOff ? L.mediaBg : null, L.mediaFit);
+    if (mode === 'overlay' && opts.media !== false) syncMedia(container, L.mediaObs && !L.allOff && !L.black && !L.overlayOff ? L.mediaBg : null, L.mediaFit);
     const raw = withMedia ? mainHTML(snap, true) : RENDER[mode](snap);
     const html = NO_CQ ? toVp(raw) : raw;
     if (container._wcHTML === html) return;
