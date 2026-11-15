@@ -23,9 +23,12 @@ bible.loadAll(db.settings.bibleFolders);
 // ── 송출 상태 (메모리) ─────────────────────────────
 // overlayOff: 방송(OBS) 자막만 끔 — 예배당 TV에는 그대로 나감
 // mediaBg: 미디어 칸에서 고른 배경(사진·영상). 슬라이드가 바뀌어도 예배당 화면 뒤에 계속 나옴
-const live = { itemId: null, index: 0, black: false, clear: false, logo: false, overlayOff: false, mediaBg: null, mediaObs: false, mediaFit: 'auto', rev: 0 };
+// tvOff: 예배당 화면(·프롬프터) 자막만 끔 — 방송(OBS) 자막은 그대로. overlayOff 의 반대. 슬라이드를 넘겨도 유지
+// ovNoImage: 방송(OBS)에서만 이미지(사진·악보·PPT 그림) 끔 — noImage 의 방송판. 배경 영상과는 따로 작동. 다른 자료를 고르면 풀림
+const live = { itemId: null, index: 0, black: false, clear: false, logo: false, noImage: false, ovNoImage: false, overlayOff: false, tvOff: false, mediaBg: null, mediaObs: false, mediaFit: 'auto', rev: 0 };
 // mediaFit: auto(영상 꽉 채우기·사진 전체 보이기) / cover 꽉 채우기 / contain 전체 보이기 / small 가운데 작게(로고)
 // mediaObs: 미디어 배경을 방송(OBS)에도 똑같이 내보낼지
+// noImage: 예배당 화면·프롬프터에서 이미지(사진·악보·PPT 그림)만 숨김 — 글자·배경 영상은 그대로. 다른 자료를 고르면 풀림
 
 const isLocal = req => {
   const a = (req.socket || req.connection).remoteAddress || '';
@@ -52,6 +55,7 @@ function snapshot() {
   const next = item?.slides[live.index + 1] || null;
   return {
     type: 'live', live: { ...live }, style: db.style, logo: db.settings.logo,
+    clearImages: db.settings.clearImages === 'hide' ? 'hide' : 'keep', // 자막 끄기(C) 때 이미지: keep 계속 보이기 / hide 같이 끄기
     item: item ? { id: item.id, title: item.title, type: item.type, count: item.slides.length, noBroadcast: !!item.noBroadcast } : null,
     slide, next,
   };
@@ -228,6 +232,8 @@ app.put('/api/settings', needLocal, (req, res) => {
   if (req.body.logo != null) db.settings.logo = req.body.logo;
   // 운영 화면 맨 위 '예배송출' 앞에 붙는 교회 로고 (비우면 ✝)
   if (req.body.titleLogo != null) db.settings.titleLogo = /^\/media\/[^/\\]+\.(png|jpe?g|gif|webp|svg)$/i.test(req.body.titleLogo) ? req.body.titleLogo : '';
+  // 자막 끄기(C)를 눌렀을 때 사진·악보·PPT 그림·미디어 배경을 계속 보일지(keep) 같이 끌지(hide)
+  if (req.body.clearImages != null) db.settings.clearImages = req.body.clearImages === 'hide' ? 'hide' : 'keep';
   if (req.body.pin != null) sessions.clear();
   changed(); pushLive(); res.json({ ok: true });
 });
@@ -311,22 +317,22 @@ app.post('/api/quit', needLocal, (req, res) => {
 
 app.post('/api/live', needLocal, (req, res) => {
   const b = req.body || {};
-  if (b.itemId !== undefined) { live.itemId = b.itemId; live.index = 0; live.clear = false; live.black = false; }
+  if (b.itemId !== undefined) { if (b.itemId !== live.itemId) live.noImage = live.ovNoImage = false; live.itemId = b.itemId; live.index = 0; live.clear = false; live.black = false; }
   if (b.index !== undefined) { live.index = Math.max(0, +b.index); live.clear = false; live.black = false; }
   if (b.step) {
     const it = db.items.find(i => i.id === live.itemId);
     if (it) live.index = Math.min(Math.max(0, live.index + b.step), it.slides.length - 1);
     live.clear = false; live.black = false;
   }
-  for (const k of ['black', 'clear', 'logo', 'overlayOff', 'mediaObs']) if (b[k] !== undefined) live[k] = !!b[k];
+  for (const k of ['black', 'clear', 'logo', 'noImage', 'ovNoImage', 'overlayOff', 'tvOff', 'mediaObs']) if (b[k] !== undefined) live[k] = !!b[k];
   if (b.mediaBg !== undefined) {
     const ok = typeof b.mediaBg === 'string' && /^\/media\/[^/\\]+$/.test(b.mediaBg) && /\.(png|jpe?g|gif|webp|bmp|mp4|mov|m4v|webm)$/i.test(b.mediaBg)
       && fs.existsSync(path.join(MEDIA_DIR, path.basename(b.mediaBg)));
     live.mediaBg = ok ? b.mediaBg : null;
-    if (ok) live.black = false;
+    if (ok) live.black = false; // 이미지 ON/OFF 와는 따로 작동 (배경을 골라도 이미지 상태는 그대로)
   }
   if (['auto', 'cover', 'contain', 'small'].includes(b.mediaFit)) live.mediaFit = b.mediaFit;
-  if (b.reset) Object.assign(live, { black: false, clear: true, logo: false, mediaBg: null });
+  if (b.reset) Object.assign(live, { black: false, clear: true, logo: false, noImage: false, ovNoImage: false, mediaBg: null });
   pushLive(); res.json(snapshot());
 });
 
@@ -374,6 +380,7 @@ server.listen(PORT, () => {
   console.log(`  운영 화면     http://localhost:${PORT}/control`);
   console.log(`  예배당 화면   http://localhost:${PORT}/output   (TV로 옮긴 뒤 F 키 = 전체화면)`);
   console.log(`  프롬프터      http://localhost:${PORT}/stage`);
+  console.log(`  OBS 자막      http://localhost:${PORT}/overlay   (OBS가 이 컴퓨터에 있을 때 — 주소가 안 바뀜)`);
   for (const ip of lan) {
     console.log(`  OBS 자막      http://${ip}:${PORT}/overlay   (OBS 브라우저 소스 1920×1080)`);
     console.log(`  웹 편집기     http://${ip}:${PORT}/editor    (PIN: ${db.settings.pin})`);

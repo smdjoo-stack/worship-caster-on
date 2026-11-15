@@ -95,11 +95,11 @@
 
   <aside class="right ctrl-only">
     <section class="rp rp-tv">
-      <div class="pv-label"><span class="rp-tag">📺 예배당 화면</span> <span id="liveInfo" class="muted"></span><span class="sz" title="예배당 화면 글자 크기 ( [ / ] 키 )"><button class="sz-b" data-sz="main" data-d="-1">A−</button><b id="sz_main">-</b><button class="sz-b" data-sz="main" data-d="1">A+</button></span></div>
+      <div class="pv-label"><span class="rp-tag">📺 예배당 화면</span> <span id="liveInfo" class="muted"></span><span class="sz" title="예배당 화면 글자 크기 ( [ / ] 키 )"><button class="sz-b tv-off" id="tvImg" title="예배당 TV(·프롬프터) 이미지 켜기/끄기 — 사진·악보·PPT 그림. 글자·배경 영상은 그대로 (I 키)">이미지 ON</button><button class="sz-b tv-off" id="tvOff" title="예배당 TV(·프롬프터) 자막 켜기/끄기. 유튜브(OBS) 자막은 그대로 나갑니다 (T 키)">자막 ON</button><button class="sz-b" data-sz="main" data-d="-1">A−</button><b id="sz_main">-</b><button class="sz-b" data-sz="main" data-d="1">A+</button></span></div>
       <div id="pvMain" class="wc-screen pv"></div>
     </section>
     <section class="rp rp-obs">
-      <div class="pv-label"><span class="rp-tag">🎥 방송 자막 (OBS)</span> <span id="ovState" class="ov-off hidden">꺼짐 — 예배당 화면에만 나가는 중</span><span class="sz" title="방송 자막 글자 크기 ( Shift+[ / Shift+] 키 )"><button class="sz-b" data-sz="overlay" data-d="-1">A−</button><b id="sz_overlay">-</b><button class="sz-b" data-sz="overlay" data-d="1">A+</button></span></div>
+      <div class="pv-label"><span class="rp-tag">🎥 방송 자막 (OBS)</span> <span id="ovState" class="ov-off hidden">방송 안 함</span><span class="sz" title="방송 자막 글자 크기 ( Shift+[ / Shift+] 키 )"><button class="sz-b tv-off" id="ovImg" title="유튜브(OBS) 이미지 켜기/끄기 — 사진·악보·PPT 그림. 자막 글자·배경 영상은 그대로 (Shift+I 키)">이미지 ON</button><button class="sz-b tv-off" id="ovToggle" title="유튜브(OBS) 자막 켜기/끄기. 예배당 TV 자막은 그대로 나갑니다 (O 키)">자막 ON</button><button class="sz-b" data-sz="overlay" data-d="-1">A−</button><b id="sz_overlay">-</b><button class="sz-b" data-sz="overlay" data-d="1">A+</button></span></div>
       <div id="pvOverlay" class="wc-screen pv checker"></div>
       <div class="ovq" title="바꾸면 바로 방송에 적용됩니다">
         <label>미디어 배경</label>
@@ -124,9 +124,10 @@
       <button class="btn big" id="prev">◀ 이전</button>
       <button class="btn big primary" id="next">다음 ▶</button>
       <button class="btn toggle" id="black">■ 검은화면 <kbd>B</kbd></button>
-      <button class="btn toggle" id="clear">◻ 글자 지우기 <kbd>C</kbd></button>
+      <button class="btn toggle" id="clear" title="예배당 화면의 글자를 끕니다. 이미지를 계속 보일지 같이 끌지는 ⚙︎ 설정에서 고릅니다">◻ 자막 끄기 <kbd>C</kbd></button>
+      <button class="btn toggle" id="noImage" title="사진·악보·PPT 그림만 예배당 화면에서 숨깁니다 (글자·배경 영상은 그대로). 한 번 더 누르면 다시 보입니다">🖼 이미지 숨기기 <kbd>I</kbd></button>
       <button class="btn toggle" id="logo">✝ 로고 <kbd>L</kbd></button>
-      <button class="btn" id="reset">모두 끄기 <kbd>Esc</kbd></button>
+      <button class="btn wide" id="reset">모두 끄기 <kbd>Esc</kbd></button>
       <button class="btn toggle wide" id="overlayOff" title="예배당 TV에는 그대로 나가고, 유튜브(OBS)에만 자막을 끕니다">🎥 방송 자막 끄기 <kbd>O</kbd></button>
     </div>
     </section>
@@ -134,7 +135,7 @@
       <div class="pv-label"><span class="rp-tag">⏭ 다음 슬라이드</span></div>
       <div id="pvNext" class="next-text muted"></div>
     </section>
-    <p class="muted small rp-help">단축키: → Space 다음 · ← 이전 · 숫자키 1~9 슬라이드 · O 방송 자막 끄기 · [ ] 글자 크기 (Shift: 방송 자막)</p>
+    <p class="muted small rp-help">단축키: → Space 다음 · ← 이전 · 숫자키 1~9 슬라이드 · I 이미지 숨기기 (Shift: 방송 이미지) · T 예배당 자막 끄기 · O 방송 자막 끄기 · [ ] 글자 크기 (Shift: 방송 자막)</p>
   </aside>
 </main>
 

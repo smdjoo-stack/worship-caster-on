@@ -14,7 +14,10 @@ async function api(method, url, body) {
   const opt = { method, headers: {} };
   if (body instanceof FormData) opt.body = body;
   else if (body !== undefined) { opt.headers['Content-Type'] = 'application/json'; opt.body = JSON.stringify(body); }
-  const r = await fetch(url, opt);
+  let r;
+  // 프로그램(서버)이 꺼져 있으면 브라우저는 'Failed to fetch'만 알려 줌 → 무엇을 할지 한국어로 안내
+  try { r = await fetch(url, opt); }
+  catch (e) { const m = '예배송출 프로그램이 꺼져 있습니다. "예배송출 실행"을 다시 눌러 켠 뒤 시도하세요.'; toast(m); throw new Error(m); }
   const j = await r.json().catch(() => ({}));
   if (!r.ok) { toast(j.error || '오류가 발생했습니다'); throw new Error(j.error); }
   // 내가 바꾼 내용은 실시간 연결 상태와 상관없이 바로 화면에 반영
@@ -201,12 +204,26 @@ function renderLive() {
   WC.render($('#pvMain'), snap, 'main');
   WC.render($('#pvOverlay'), snap, 'overlay');
   const L = snap.live;
-  for (const k of ['black', 'clear', 'logo', 'overlayOff']) $('#' + k).classList.toggle('on', !!L[k]);
+  for (const k of ['black', 'clear', 'logo', 'noImage', 'overlayOff']) $('#' + k).classList.toggle('on', !!L[k]);
+  $('#noImage').innerHTML = (L.noImage ? '🖼 이미지 다시 보이기' : '🖼 이미지 숨기기') + ' <kbd>I</kbd>';
   const ovOff = L.overlayOff || snap.item?.noBroadcast;
-  $('#ovState').classList.toggle('hidden', !ovOff);
-  $('#ovState').textContent = L.overlayOff ? '꺼짐 — 예배당 화면에만 나가는 중' : '이 자료는 방송에 내보내지 않음';
+  // 직접 끈 경우는 아래 '자막 OFF' 버튼이 알려 줌. 자료 설정으로 방송에 안 나가는 경우만 짧게 표시
+  $('#ovState').classList.toggle('hidden', L.overlayOff || !snap.item?.noBroadcast);
+  $('#ovState').textContent = '방송 안 함';
+  $('#ovState').title = '이 자료는 방송(OBS)에 내보내지 않도록 설정되어 있습니다';
+  $('#ovToggle').classList.toggle('on', !!L.overlayOff);
+  $('#ovToggle').textContent = L.overlayOff ? '자막 OFF' : '자막 ON';
+  // 이미지 ON/OFF: 예배당 = 이미지 숨기기(I), 방송 = 방송에서만 이미지 끄기
+  $('#tvImg').classList.toggle('on', !!L.noImage);
+  $('#tvImg').textContent = L.noImage ? '이미지 OFF' : '이미지 ON';
+  $('#ovImg').classList.toggle('on', !!L.ovNoImage);
+  $('#ovImg').textContent = L.ovNoImage ? '이미지 OFF' : '이미지 ON';
   $('#overlayOff').innerHTML = (L.overlayOff ? '🎥 방송 자막 다시 켜기' : '🎥 방송 자막 끄기') + ' <kbd>O</kbd>';
-  $('#liveInfo').textContent = snap.item ? `· ${snap.item.title} ${L.index + 1}/${snap.item.count}` : '· 대기';
+  $('#tvOff').classList.toggle('on', !!L.tvOff);
+  // 지금 상태를 보여 줌: ON(나가는 중) / OFF(빨강, 꺼짐). 누르면 바뀜
+  $('#tvOff').textContent = L.tvOff ? '자막 OFF' : '자막 ON';
+  // 곡명은 빼고 몇 번째 장인지만 (좁은 칸에서 줄바꿈 안 되게)
+  $('#liveInfo').textContent = snap.item ? `${L.index + 1}/${snap.item.count}` : '대기';
   $('#pvNext').textContent = snap.next ? snap.next.text : (snap.item ? '— 마지막 슬라이드 —' : '');
 }
 
@@ -374,7 +391,7 @@ function openItemEditor(id, focusIndex) {
     lyrList.querySelectorAll('li').forEach(x => x.classList.toggle('sel', x === li));
     lyrMsg.textContent = `'${r.title} — ${r.artist}' 가사를 가져오는 중…`;
     const res = lyrCache[r.id] || await api('GET', '/api/lyrics/' + r.id).catch(e => ({ error: e.message || '가져오기 실패' }));
-    if (res.error) { lyrMsg.textContent = res.error; return false; }
+    if (res.error) { lyrMsg.textContent = res.error; return null; }
     lyrCache[r.id] = res;
     if (!res.lyrics) { li?.querySelector('.muted')?.append(' · 가사 없음'); lyrMsg.textContent = `'${r.artist}' 음원에는 가사가 없습니다. 다른 음원을 고르세요.`; return false; }
     body.querySelector('#ePaste').value = res.lyrics;
@@ -387,7 +404,7 @@ function openItemEditor(id, focusIndex) {
     lyrBox.hidden = false; lyrList.innerHTML = ''; lyrMsg.textContent = `'${title}' 검색 중…`;
     let results;
     try { results = await api('GET', '/api/lyrics/search?q=' + encodeURIComponent(title)); } catch (e) { lyrMsg.textContent = e.message || '검색 실패'; return; }
-    if (!results.length) { lyrMsg.textContent = '검색 결과가 없습니다. 제목을 바꾸거나 구글·네이버로 찾아보세요.'; return; }
+    if (!results.length) { lyrMsg.textContent = `벅스에 '${title}' 음원이 없습니다. 제목만 정확히 쓰거나(키·괄호 빼고), 위의 [구글]·[네이버] 버튼으로 찾아 붙여넣으세요.`; return; }
     const lis = results.map(r => {
       const li = document.createElement('li');
       li.innerHTML = `<span class="t">${esc(r.title)} <span class="muted small">${esc(r.artist)}</span></span>`;
@@ -395,9 +412,15 @@ function openItemEditor(id, focusIndex) {
       lyrList.append(li);
       return li;
     });
-    // 반주·연주 음원은 가사가 없으므로 가사 있는 음원이 나올 때까지 최대 6개 확인
-    for (let i = 0; i < Math.min(6, results.length); i++) if (await loadLyrics(results[i], lis[i])) return;
-    lyrMsg.textContent = '앞쪽 음원들에 가사가 없습니다. 목록에서 다른 음원을 누르거나, 제목에 가수 이름을 더해 다시 찾아보세요.';
+    // 반주·연주 음원은 가사가 없으므로 가사 있는 음원이 나올 때까지 최대 10개 확인
+    // 오류(연결 실패·요청 막힘)면 더 묻지 않고 멈춤. 사이트에 부담을 덜 주려고 사이사이 잠깐 쉼
+    for (let i = 0; i < Math.min(10, results.length); i++) {
+      if (i) await new Promise(r => setTimeout(r, 300));
+      const ok = await loadLyrics(results[i], lis[i]);
+      if (ok) return;
+      if (ok === null) return;
+    }
+    lyrMsg.textContent = '앞쪽 음원들에 가사가 없습니다. 목록에서 다른 음원을 누르거나, [구글]·[네이버] 버튼으로 찾아 붙여넣으세요.';
   };
   body.querySelector('#eType').onchange = e => { it.type = e.target.value; draw(); };
   body.querySelector('#eNoBc').onchange = e => { it.noBroadcast = e.target.checked; };
@@ -819,9 +842,12 @@ function openOBS() {
     <div class="dlg-head"><h3>🎥 OBS에 자막 얹기</h3><button class="icon" data-x>✕</button></div>
     <p>방송 PC(맥/윈도우)의 OBS에서 <b>소스 ＋ → 브라우저</b>를 추가하고 아래 주소를 넣으세요. 너비 <b>1920</b>, 높이 <b>1080</b>.
     카메라 소스 <b>위에</b> 두면 자막만 투명하게 얹힙니다. (캡처 장비·NDI 플러그인 필요 없음)</p>
-    ${urls.map(u => `<div class="copy row"><input readonly value="${u}"><button class="btn" data-copy="${u}">복사</button></div>`).join('') || '<p class="err">네트워크 주소를 찾지 못했습니다. 와이파이/랜 연결을 확인하세요. 같은 맥에서 OBS를 쓰면: http://localhost:' + S.port + '/overlay</p>'}
-    <p class="muted small">· 같은 맥에서 OBS를 돌릴 때: <code>http://localhost:${S.port}/overlay</code><br>
-    · 방송 PC와 이 맥은 같은 공유기(네트워크)에 있어야 합니다. 맥 방화벽이 묻으면 "허용"을 누르세요.<br>
+    <p><b>① OBS가 이 컴퓨터에 있을 때 (권장)</b> — 주소가 바뀌지 않습니다.</p>
+    <div class="copy row"><input readonly value="http://localhost:${S.port}/overlay"><button class="btn" data-copy="http://localhost:${S.port}/overlay">복사</button></div>
+    <p><b>② OBS가 다른 컴퓨터에 있을 때</b></p>
+    ${urls.map(u => `<div class="copy row"><input readonly value="${u}"><button class="btn" data-copy="${u}">복사</button></div>`).join('') || '<p class="err">네트워크 주소를 찾지 못했습니다. 와이파이/랜 연결을 확인하세요.</p>'}
+    <p class="muted small">· ②의 숫자 주소는 공유기가 바꿀 수 있습니다. OBS에 자막이 안 보이면 여기서 주소를 다시 복사해 OBS 브라우저 소스에 넣으세요.<br>
+    · 방송 PC와 이 컴퓨터는 같은 공유기(네트워크)에 있어야 합니다. 방화벽이 묻으면 "허용"을 누르세요.<br>
     · 웹 편집기(주중 준비): <code>${S.lan[0] ? `http://${S.lan[0]}:${S.port}/editor` : '-'}</code> · PIN <b>${esc(S.settings.pin || '')}</b> (⚙︎ 설정에서 변경)</p>
     <div class="dlg-foot"><button class="btn" data-x>닫기</button></div>`);
   $('#dlgBody').querySelectorAll('[data-copy]').forEach(b => b.onclick = () => { navigator.clipboard.writeText(b.dataset.copy); toast('복사했습니다'); });
@@ -837,6 +863,10 @@ function openSettings() {
       <label>로고 (L 키)</label><div class="row">${S.settings.logo ? `<img src="${esc(S.settings.logo)}" style="height:40px">` : '<span class="muted">없음</span>'}<button class="btn" id="stLogo">로고 선택</button></div>
       <label>타이틀 로고</label><div class="row">${S.settings.titleLogo ? `<img src="${esc(S.settings.titleLogo)}" style="height:28px">` : '<span class="muted">✝ (기본)</span>'}<button class="btn" id="stTitleLogo">로고 선택</button>${S.settings.titleLogo ? '<button class="btn" id="stTitleLogoOff">✝ 로 되돌리기</button>' : ''}
         <span class="muted small">운영 화면 맨 위 '예배송출' 앞에 붙는 작은 로고</span></div>
+      <label>자막 끄기 (C) 할 때 이미지</label><div class="row"><select id="stClearImages">
+          <option value="keep"${S.settings.clearImages !== 'hide' ? ' selected' : ''}>이미지는 계속 보이기 (사진·악보·배경 영상)</option>
+          <option value="hide"${S.settings.clearImages === 'hide' ? ' selected' : ''}>이미지도 같이 끄기</option>
+        </select><span class="muted small">고르면 바로 저장됩니다</span></div>
       <label>성경 폴더</label><div>
         <div id="stFolders"></div>
         <div class="row"><input id="stFolderNew" placeholder="폴더 경로 (Finder에서 폴더를 이 칸으로 끌어다 놓아도 됩니다)"><button class="btn" id="stFolderAdd">추가</button></div>
@@ -857,6 +887,11 @@ function openSettings() {
   nf.addEventListener('dragover', e => e.preventDefault());
   nf.addEventListener('drop', e => { const t = e.dataTransfer.getData('text/plain') || e.dataTransfer.getData('text/uri-list'); if (t) { e.preventDefault(); nf.value = decodeURIComponent(t.replace(/^file:\/\//, '')).replace(/\/$/, ''); } });
   body.querySelector('#stFolderAdd').onclick = () => { const v = nf.value.trim().replace(/^['"]|['"]$/g, ''); if (v) saveFolders([...folders, v]); };
+  body.querySelector('#stClearImages').onchange = async e => {
+    await api('PUT', '/api/settings', { clearImages: e.target.value });
+    S.settings.clearImages = e.target.value;
+    toast(e.target.value === 'hide' ? '자막 끄기 때 이미지도 같이 끕니다 (저장됨)' : '자막 끄기 때 이미지는 계속 보입니다 (저장됨)');
+  };
   body.querySelector('#stPinSave').onclick = async () => { await api('PUT', '/api/settings', { pin: body.querySelector('#stPin').value }); toast('PIN을 바꿨습니다 (기존 접속은 로그아웃)'); };
   body.querySelector('#stLogo').onclick = () => openMediaPicker(async url => { await api('PUT', '/api/settings', { logo: url }); await reload(); openSettings(); }, openSettings);
   body.querySelector('#stTitleLogo').onclick = () => openMediaPicker(async url => {
@@ -938,8 +973,13 @@ function bind() {
   $('#black').onclick = () => goLive({ black: !snap.live.black });
   $('#clear').onclick = () => goLive({ clear: !snap.live.clear });
   $('#logo').onclick = () => goLive({ logo: !snap.live.logo, black: !snap.live.logo });
+  $('#noImage').onclick = () => goLive({ noImage: !snap.live.noImage });
   $('#reset').onclick = () => goLive({ reset: true });
   $('#overlayOff').onclick = () => goLive({ overlayOff: !snap.live.overlayOff });
+  $('#tvOff').onclick = () => goLive({ tvOff: !snap.live.tvOff });
+  $('#ovToggle').onclick = () => $('#overlayOff').click(); // '🎥 방송 자막 끄기 (O)'와 같은 기능
+  $('#tvImg').onclick = () => $('#noImage').click();        // '🖼 이미지 숨기기 (I)'와 같은 기능
+  $('#ovImg').onclick = () => goLive({ ovNoImage: !snap.live.ovNoImage });
 
   addEventListener('keydown', e => {
     if (dlg.open || /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
@@ -949,7 +989,9 @@ function bind() {
     else if (k === 'b' || k === 'B') $('#black').click();
     else if (k === 'c' || k === 'C') $('#clear').click();
     else if (k === 'l' || k === 'L') $('#logo').click();
+    else if (k === 'i' || k === 'I') $(e.shiftKey ? '#ovImg' : '#noImage').click();
     else if (k === 'o' || k === 'O') $('#overlayOff').click();
+    else if (k === 't' || k === 'T') $('#tvOff').click();
     else if (k === 'Escape') $('#reset').click();
     else if (e.code === 'BracketLeft' || e.code === 'BracketRight') { e.preventDefault(); bumpSize(e.shiftKey ? 'overlay' : 'main', e.code === 'BracketRight' ? 1 : -1); }
     else if (/^[1-9]$/.test(k) && selId) goLive({ itemId: selId, index: +k - 1 }).catch(() => {});
