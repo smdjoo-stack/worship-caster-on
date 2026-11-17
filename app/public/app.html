@@ -83,10 +83,12 @@
         <div class="grow"></div>
         <input type="range" id="mbSize" min="110" max="260" step="10" value="170" title="미리보기 크기">
         <label class="btn sm">＋ 올리기<input type="file" id="mbUp" multiple accept="image/png,image/jpeg,image/gif,image/webp,image/bmp,video/*" hidden></label>
+        <button class="btn sm" id="mbYt" title="유튜브 링크를 넣어 배경으로 (인터넷 필요)">＋ 유튜브</button>
         <select id="mbFit" class="mbin-fit" title="배경 크기 맞춤">
           <option value="auto">맞춤: 자동</option><option value="cover">꽉 채우기</option><option value="contain">전체 보이기</option><option value="small">작게 (로고)</option>
         </select>
         <button class="btn sm toggle" id="mbObs" title="미디어 배경을 방송(OBS)에도 똑같이 내보내기">🎥 방송에도</button>
+        <button class="btn sm" id="mbYtPlay" title="유튜브 배경 재생 / 일시정지 (P 키)" hidden>⏸ 일시정지</button>
         <button class="btn sm" id="mbOff" title="예배당 화면의 미디어 배경 끄기">⏹ 배경 끄기</button>
       </div>
       <div id="mbGrid" class="mbin-grid"></div>
@@ -127,8 +129,17 @@
       <button class="btn toggle" id="reset" title="예배당 TV·프롬프터·방송(OBS)을 한꺼번에 비웁니다 (글자·이미지·배경 영상·로고 모두). 한 번 더 누르거나 다음 장으로 넘기면 끄기 전 화면으로 돌아옵니다">✖ 모두 끄기 <kbd>Esc</kbd></button>
       <button class="btn toggle wide" id="overlayOff" title="예배당 TV에는 그대로 나가고, 유튜브(OBS)에만 자막을 끕니다">🎥 방송 자막 끄기 <kbd>O</kbd></button>
     </div>
+    <!-- 유튜브 영상이 송출 중일 때만 보임: 예배당 화면·방송의 영상을 함께 조작 -->
+    <div class="yt-ctl" id="ytCtl" hidden>
+      <span class="yt-tag">▶ YouTube</span>
+      <button class="btn sm" data-yt="restart" title="처음(시작 시간)부터 다시 재생">⏮ 처음</button>
+      <button class="btn sm" data-yt="back" title="10초 뒤로">⏪ 10초</button>
+      <button class="btn sm yt-main" id="ytPlay" title="재생 / 일시정지 (P 키)">⏸ 일시정지</button>
+      <button class="btn sm" data-yt="fwd" title="10초 앞으로">10초 ⏩</button>
+      <button class="btn sm" id="ytMute" title="예배당 화면 영상 소리 끄기/켜기 (방송 영상은 늘 소리 없이 그림만 — 소리는 한 곳에서만)">🔇 소리 끄기</button>
+    </div>
     </section>
-    <p class="muted small rp-help">단축키: → Space 다음 · ← 이전 · 숫자키 1~9 슬라이드 · C 모든 자막 끄기 · T 예배당 자막 · O 방송 자막 · I 예배당 이미지 (Shift: 방송 이미지) · [ ] 글자 크기 (Shift: 방송 자막)</p>
+    <p class="muted small rp-help">단축키: → Space 다음 · ← 이전 · 숫자키 1~9 슬라이드 · C 모든 자막 끄기 · T 예배당 자막 · O 방송 자막 · I 예배당 이미지 (Shift: 방송 이미지) · P 유튜브 재생/일시정지 · [ ] 글자 크기 (Shift: 방송 자막)</p>
   </aside>
 </main>
 

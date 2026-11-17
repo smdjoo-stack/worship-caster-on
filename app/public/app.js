@@ -2,7 +2,22 @@
 const IS_EDITOR = location.pathname.startsWith('/editor');
 const $ = s => document.querySelector(s);
 const esc = WC.esc;
-const TYPE = { song: '찬양', bible: '말씀', notice: '광고', ppt: 'PPT', score: '악보·PDF', html: 'HTML' };
+const TYPE = { song: '찬양', bible: '말씀', notice: '광고', ppt: 'PPT', score: '악보·PDF', html: 'HTML', youtube: '유튜브' };
+
+// 유튜브 주소 → { id, start } (watch?v= · youtu.be/ · shorts/ · live/ · embed/ 모두, &t=1m30s 시작 시간도)
+function parseYoutube(text) {
+  const s = String(text || '').trim();
+  if (/^[\w-]{11}$/.test(s)) return { id: s, start: 0 };
+  let u; try { u = new URL(/^https?:\/\//i.test(s) ? s : 'https://' + s); } catch { return null; }
+  if (!/(^|\.)youtube\.com$|(^|\.)youtube-nocookie\.com$|^youtu\.be$/i.test(u.hostname)) return null;
+  let id = /^youtu\.be$/i.test(u.hostname) ? u.pathname.slice(1) : u.searchParams.get('v') || (u.pathname.match(/^\/(?:shorts|live|embed|v)\/([^/?#]+)/) || [])[1];
+  id = String(id || '').slice(0, 11);
+  if (!/^[\w-]{11}$/.test(id)) return null;
+  const t = u.searchParams.get('t') || u.searchParams.get('start') || '';
+  const m = String(t).match(/^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s?)?$/);
+  const start = m ? (+m[1] || 0) * 3600 + (+m[2] || 0) * 60 + (+m[3] || 0) : 0;
+  return { id, start };
+}
 
 let S = null;           // 서버 데이터
 let snap = null;        // 송출 상태
@@ -205,6 +220,12 @@ function renderLive() {
   WC.render($('#pvOverlay'), snap, 'overlay');
   const L = snap.live;
   for (const k of ['black', 'clear', 'logo', 'overlayOff']) $('#' + k).classList.toggle('on', !!L[k]);
+  // 유튜브 배경(미디어 칸)이 나가는 중일 때만 재생 관리 줄을 보임. 다른 영상으로 바뀌면 '재생 중·소리 켜짐'으로 초기화
+  const ytKey = isYt(L.mediaBg) && !L.allOff ? L.mediaBg : snap.slide?.youtube ? 'slide:' + snap.slide.id : null;
+  $('#ytCtl').hidden = !ytKey;
+  document.body.classList.toggle('yt-live', !!ytKey);
+  if (ytKey !== ytState.slideId) Object.assign(ytState, { slideId: ytKey, paused: false, muted: false });
+  drawYt();
   $('#reset').classList.toggle('on', !!L.allOff);
   $('#reset').innerHTML = (L.allOff ? '✖ 모두 꺼짐 · 다시 켜기' : '✖ 모두 끄기') + ' <kbd>Esc</kbd>';
   const ovOff = L.overlayOff || snap.item?.noBroadcast;
@@ -230,11 +251,40 @@ function renderLive() {
 function select(id) { selId = id; renderServices(); renderLib(); renderSlides(); }
 
 // ── 송출 ─────────────────────────────────────────
+// 유튜브 재생 관리: 버튼 상태는 운영 화면이 기억 (플레이어는 예배당 화면·방송 창 안에 있음)
+const ytState = { slideId: null, paused: false, muted: false };
+function drawYt() {
+  const p = $('#ytPlay'), m = $('#ytMute');
+  if (!p) return;
+  p.textContent = ytState.paused ? '▶ 재생' : '⏸ 일시정지';
+  p.classList.toggle('on', ytState.paused);
+  m.textContent = ytState.muted ? '🔊 소리 켜기' : '🔇 소리 끄기';
+  m.classList.toggle('on', ytState.muted);
+  // 미디어 칸의 재생·일시정지 버튼 (유튜브 배경이 나가는 중일 때만) — 송출 조작의 버튼과 같은 상태
+  const mb = $('#mbYtPlay');
+  if (mb) {
+    mb.hidden = !(isYt(snap?.live?.mediaBg) && !snap?.live?.allOff);
+    mb.textContent = ytState.paused ? '▶ 재생' : '⏸ 일시정지';
+    mb.classList.toggle('on', ytState.paused);
+  }
+}
+const ytCmd = cmd => api('POST', '/api/youtube-cmd', { cmd }).catch(() => {});
+
 async function goLive(b) { if (!IS_EDITOR) snap = await api('POST', '/api/live', b); }
 
 function connectWS() {
   const ws = new WebSocket('ws://' + location.host + '/ws');
-  ws.onopen = () => { if (S) reload().catch(() => {}); };  // 끊겼다 다시 연결되면 놓친 변경 반영
+  ws.onopen = () => {
+    if (S) reload().catch(() => {});  // 끊겼다 다시 연결되면 놓친 변경 반영
+    // 예배송출이 다시 켜졌으면(업데이트·재시작) 새 화면을 받도록 운영 화면도 새로고침 — 편집 창이 열려 있으면 안내만
+    fetch('/api/boot', { cache: 'no-store' }).then(r => r.json()).then(({ boot }) => {
+      if (window._wcBoot && window._wcBoot !== boot) {
+        if (dlg.open) toast('예배송출이 새로 켜졌습니다. 편집을 마친 뒤 F5를 눌러 주세요');
+        else return location.reload();
+      }
+      window._wcBoot = boot;
+    }).catch(() => {});
+  };
   ws.onmessage = async e => {
     const m = JSON.parse(e.data);
     if (m.type === 'live') {
@@ -632,7 +682,9 @@ async function openMediaPicker(onPick, onCancel) {
 }
 
 // ── 미디어 칸 (아래쪽): 누르면 예배당 화면 배경으로 계속 나옴 ──────────
-const isVid = u => /\.(mp4|mov|m4v|webm)$/i.test(u);
+const isYt = u => /^yt:[\w-]{11}/.test(u || '');                    // 미디어 칸의 유튜브 배경 ('yt:영상번호@시작초')
+const isVid = u => /\.(mp4|mov|m4v|webm)$/i.test(u) || isYt(u);
+const ytThumb = u => `https://i.ytimg.com/vi/${String(u).slice(3, 14)}/mqdefault.jpg`;
 let mbFiles = [], mbFilter = 'all';
 const fitMem = () => { try { return JSON.parse(localStorage.getItem('wc-mb-fit') || '{}') || {}; } catch (e) { return {}; } };
 async function loadMediaBin() {
@@ -644,9 +696,10 @@ function renderMediaBin() {
   const grid = $('#mbGrid'); if (!grid) return;
   const list = mbFiles.filter(f => mbFilter === 'all' || (mbFilter === 'video') === isVid(f.url));
   grid.innerHTML = list.map((f, i) => `<div class="mb-item" data-url="${esc(f.url)}" title="${esc(f.name)}">
-      <div class="mb-th">${isVid(f.url) ? `<video src="${esc(f.url)}#t=0.5" muted loop playsinline preload="metadata"></video><span class="mb-dur">영상</span>` : `<img class="fit" src="${esc(f.url)}" loading="lazy">`}<span class="mb-tag">LIVE</span><button class="mb-del" data-del="${esc(f.name)}" title="이 파일 삭제">🗑</button></div>
+      <div class="mb-th">${isYt(f.url) ? `<img class="fit" src="${ytThumb(f.url)}" loading="lazy" style="object-fit:cover"><span class="mb-dur mb-yt">▶ YouTube</span>`
+        : isVid(f.url) ? `<video src="${esc(f.url)}#t=0.5" muted loop playsinline preload="metadata"></video><span class="mb-dur">영상</span>` : `<img class="fit" src="${esc(f.url)}" loading="lazy">`}<span class="mb-tag">LIVE</span><button class="mb-del" data-del="${esc(f.name)}" title="${isYt(f.url) ? '이 유튜브 영상을 목록에서 빼기' : '이 파일 삭제'}">🗑</button></div>
       <div class="mb-name"><span>${i + 1}</span><span class="t">${esc(f.name)}</span>${isVid(f.url) ? '<span title="반복 재생">🔁</span>' : ''}</div>
-    </div>`).join('') || '<div class="mbin-empty">사진·영상을 ＋ 올리기로 넣으면 여기에 나옵니다.</div>';
+    </div>`).join('') || '<div class="mbin-empty">사진·영상을 ＋ 올리기로, 유튜브는 ＋ 유튜브로 넣으면 여기에 나옵니다.</div>';
   grid.querySelectorAll('.mb-item').forEach(el => {
     const v = el.querySelector('video');
     if (v) {
@@ -662,8 +715,64 @@ function renderMediaBin() {
   });
   markMediaLive();
 }
+// 미디어 올리기 (＋ 올리기 버튼·끌어다 놓기 공통): 사진·영상만 골라서 올림
+const MEDIA_OK = /\.(png|jpe?g|gif|webp|bmp|mp4|mov|m4v|webm)$/i;
+async function uploadMedia(files) {
+  const ok = files.filter(f => MEDIA_OK.test(f.name));
+  const skipped = files.length - ok.length;
+  if (!ok.length) { toast('사진(jpg·png·gif·webp)이나 영상(mp4·mov·webm) 파일만 넣을 수 있습니다'); return; }
+  const fd = new FormData(); ok.forEach(f => fd.append('files', f));
+  toast(`${ok.length}개 올리는 중…`);
+  try { await api('POST', '/api/media', fd); } catch (e) { return; }
+  await loadMediaBin();
+  toast(`${ok.length}개를 올렸습니다${skipped ? ` (사진·영상이 아닌 ${skipped}개는 뺐습니다)` : ''}`);
+}
+
+// 미디어 칸 ＋ 유튜브: 링크 붙여넣기 → 제목·썸네일 확인 → 미디어 목록에 추가 (누르면 배경으로 반복 재생)
+function openYoutubeAdd(prefill) {
+  const body = openDlg(`
+    <div class="dlg-head"><h3>유튜브 배경 넣기</h3><button class="icon" data-x>✕</button></div>
+    <div class="form">
+      <label>유튜브 링크</label><input id="ytUrl" placeholder="https://www.youtube.com/watch?v=… 또는 https://youtu.be/…" autocomplete="off">
+      <label>이름</label><input id="ytTitle" placeholder="링크를 넣으면 자동으로 채워집니다">
+      <label>미리보기</label><div id="ytPrev" class="muted small">링크를 붙여넣으세요</div>
+    </div>
+    <p class="muted small">미디어 칸에 추가됩니다. 누르면 예배당 화면 배경으로 반복 재생되고(인터넷 필요), 소리는 예배당 화면에서만 납니다.
+    '🎥 방송에도'를 켜면 방송(OBS)에도 그림만 나갑니다. 주소에 시작 시간(&t=1m30s)이 있으면 그 부분부터 재생합니다.</p>
+    <div class="dlg-foot"><button class="btn" data-x>취소</button><button class="btn primary" id="ytAdd" disabled>추가</button></div>`);
+  body.querySelectorAll('[data-x]').forEach(b => (b.onclick = closeDlg));
+  const url = body.querySelector('#ytUrl'), title = body.querySelector('#ytTitle'), prev = body.querySelector('#ytPrev'), add = body.querySelector('#ytAdd');
+  let cur = null, seq = 0, titleTouched = false;
+  title.oninput = () => { titleTouched = true; };
+  url.oninput = async () => {
+    cur = parseYoutube(url.value); add.disabled = !cur;
+    if (!cur) { prev.textContent = url.value.trim() ? '유튜브 주소가 아닙니다' : '링크를 붙여넣으세요'; return; }
+    prev.innerHTML = `<img src="https://i.ytimg.com/vi/${cur.id}/mqdefault.jpg" style="width:240px;border-radius:8px;display:block" alt="">`;
+    const my = ++seq;
+    const info = await api('GET', '/api/youtube/' + cur.id).catch(() => null);
+    if (my !== seq || !info) return;
+    if (info.title && !titleTouched) title.value = info.title;
+    if (info.embeddable === false) prev.insertAdjacentHTML('beforeend', '<p class="small" style="color:var(--live)">⚠ 이 영상은 다른 곳에서 재생을 막아 두었을 수 있습니다. 재생이 안 되면 다른 영상을 쓰세요.</p>');
+    if (info.offline) prev.insertAdjacentHTML('beforeend', '<p class="muted small">인터넷 연결을 확인하세요 (제목을 못 가져왔습니다)</p>');
+  };
+  url.focus();
+  if (typeof prefill === 'string' && prefill) { url.value = prefill; url.oninput(); } // 끌어다 놓은 링크
+  add.onclick = async () => {
+    if (!cur) return;
+    await api('POST', '/api/media/youtube', { id: cur.id, start: cur.start, title: title.value.trim() });
+    closeDlg(); await loadMediaBin();
+    toast('미디어 칸에 추가했습니다. 누르면 예배당 화면 배경으로 재생됩니다');
+  };
+}
 // 미디어 파일 삭제: 슬라이드에서 쓰는 중이면 몇 곳에서 쓰는지 알려 주고, 송출 중인 배경이면 먼저 끔
 async function deleteMedia(url, name) {
+  // 유튜브는 파일이 아니라 목록에서 빼기만 (영상 자체는 유튜브에 그대로)
+  if (isYt(url)) {
+    const live = snap?.live?.mediaBg === url;
+    if (!confirm(`'${name}' 유튜브 영상을 미디어 목록에서 뺄까요?${live ? '\n\n※ 지금 배경으로 나가는 중입니다. 배경을 끄고 뺍니다.' : ''}`)) return;
+    await api('DELETE', '/api/media/youtube/' + encodeURIComponent(url));
+    await loadMediaBin(); toast('목록에서 뺐습니다'); return;
+  }
   const used = (S?.items || []).filter(it => (it.slides || []).some(s => s.bg === url || (s.elements || []).some(e => e.src === url)));
   const isLive = snap?.live?.mediaBg === url;
   let msg = `'${name}' 파일을 삭제할까요?\n삭제하면 되돌릴 수 없습니다.`;
@@ -681,7 +790,7 @@ function markMediaLive() {
   document.querySelectorAll('#mbGrid .mb-item').forEach(el => el.classList.toggle('live', el.dataset.url === cur));
   const lab = $('#mbLive'); if (!lab) return;
   lab.classList.toggle('on', !!cur);
-  lab.textContent = cur ? '● 배경: ' + decodeURIComponent(cur.split('/').pop()) : '배경 없음';
+  lab.textContent = cur ? '● 배경: ' + (isYt(cur) ? '▶ ' + (mbFiles.find(f => f.url === cur)?.name || 'YouTube') : decodeURIComponent(cur.split('/').pop())) : '배경 없음';
   $('#mbOff').disabled = !cur;
   const obs = !!snap?.live?.mediaObs;
   $('#mbObs').classList.toggle('on', obs);
@@ -701,11 +810,32 @@ function initMediaBin() {
   try { size.value = localStorage.getItem('wc-mb-size') || size.value; } catch (e) {}
   const applySize = () => { $('.mbin').style.setProperty('--mb', size.value + 'px'); try { localStorage.setItem('wc-mb-size', size.value); } catch (e) {} };
   size.oninput = applySize; applySize();
-  $('#mbUp').onchange = async e => {
-    const fd = new FormData(); [...e.target.files].forEach(f => fd.append('files', f));
-    e.target.value = '';
-    toast('올리는 중…'); await api('POST', '/api/media', fd); await loadMediaBin(); toast('올렸습니다');
-  };
+  $('#mbUp').onchange = async e => { const files = [...e.target.files]; e.target.value = ''; await uploadMedia(files); };
+
+  // 끌어다 놓기: 사진·영상 파일 → 올리기, 유튜브 링크 → 유튜브 추가 창
+  const bin = $('.mbin');
+  const isFiles = e => [...(e.dataTransfer?.types || [])].includes('Files');
+  const isLink = e => [...(e.dataTransfer?.types || [])].some(t => t === 'text/uri-list' || t === 'text/plain');
+  let depth = 0;
+  bin.addEventListener('dragenter', e => { if (!isFiles(e) && !isLink(e)) return; e.preventDefault(); depth++; bin.classList.add('drop'); });
+  bin.addEventListener('dragover', e => { if (!isFiles(e) && !isLink(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
+  bin.addEventListener('dragleave', () => { if (--depth <= 0) { depth = 0; bin.classList.remove('drop'); } });
+  bin.addEventListener('drop', async e => {
+    e.preventDefault(); e.stopPropagation(); depth = 0; bin.classList.remove('drop');
+    const files = [...e.dataTransfer.files];
+    if (files.length) return uploadMedia(files);
+    const text = (e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain') || '').split('\n')[0].trim();
+    if (parseYoutube(text)) return openYoutubeAdd(text);
+    toast('사진·영상 파일이나 유튜브 링크를 놓아 주세요');
+  });
+  // 미디어 칸 밖에 파일을 놓으면 엣지가 그 파일을 열어 운영 화면이 바뀌어 버림 → 막고 안내만
+  addEventListener('dragover', e => { if (isFiles(e)) e.preventDefault(); });
+  addEventListener('drop', e => {
+    if (!isFiles(e) || e.defaultPrevented) return;
+    e.preventDefault(); toast('파일은 가운데 아래 🎞 미디어 칸에 놓아 주세요');
+  });
+  $('#mbYt').onclick = openYoutubeAdd;
+  $('#mbYtPlay').onclick = () => $('#ytPlay').click(); // 송출 조작의 ⏸/▶ 와 같은 기능
   $('#mbOff').onclick = () => goLive({ mediaBg: null });
   // 미디어 배경을 방송(OBS)에도 — 미디어 칸 버튼과 방송 자막 카드 체크박스가 같은 설정
   $('#mbObs').onclick = () => goLive({ mediaObs: !snap?.live?.mediaObs }).catch(() => {});
@@ -972,6 +1102,12 @@ function bind() {
   $('#black').onclick = () => goLive({ black: !snap.live.black });
   $('#clear').onclick = () => goLive({ clear: !snap.live.clear });
   $('#logo').onclick = () => goLive({ logo: !snap.live.logo, black: !snap.live.logo });
+  document.querySelectorAll('[data-yt]').forEach(b => (b.onclick = () => {
+    ytCmd(b.dataset.yt);
+    if (b.dataset.yt === 'restart') { ytState.paused = false; drawYt(); }
+  }));
+  $('#ytPlay').onclick = () => { ytState.paused = !ytState.paused; ytCmd(ytState.paused ? 'pause' : 'play'); drawYt(); };
+  $('#ytMute').onclick = () => { ytState.muted = !ytState.muted; ytCmd(ytState.muted ? 'mute' : 'unmute'); drawYt(); };
   $('#reset').onclick = () => goLive({ allOff: !snap.live.allOff }); // 모두 끄기 ↔ 다시 켜기 (끄기 전 화면으로)
   $('#overlayOff').onclick = () => goLive({ overlayOff: !snap.live.overlayOff });
   $('#tvOff').onclick = () => goLive({ tvOff: !snap.live.tvOff });
@@ -990,6 +1126,7 @@ function bind() {
     else if (k === 'i' || k === 'I') $(e.shiftKey ? '#ovImg' : '#tvImg').click();
     else if (k === 'o' || k === 'O') $('#overlayOff').click();
     else if (k === 't' || k === 'T') $('#tvOff').click();
+    else if ((k === 'p' || k === 'P') && !$('#ytCtl').hidden) $('#ytPlay').click();
     else if (k === 'Escape') $('#reset').click();
     else if (e.code === 'BracketLeft' || e.code === 'BracketRight') { e.preventDefault(); bumpSize(e.shiftKey ? 'overlay' : 'main', e.code === 'BracketRight' ? 1 : -1); }
     else if (/^[1-9]$/.test(k) && selId) goLive({ itemId: selId, index: +k - 1 }).catch(() => {});

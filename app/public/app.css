@@ -45,6 +45,11 @@ body.editor .ctrl-only { display: none !important; }
 body.editor .center-main { flex: 1; }
 /* 미디어 칸 (아래쪽) */
 .mbin { --mb: 170px; flex: none; height: clamp(220px, 36vh, 380px); display: flex; flex-direction: column; background: var(--panel); border-top: 1px solid var(--line); }
+/* 끌어다 놓는 중: 미디어 칸 강조 + 안내 */
+.mbin { position: relative; }
+.mbin.drop { outline: 3px dashed var(--accent); outline-offset: -6px; }
+.mbin.drop::after { content: '여기에 놓으면 미디어에 추가됩니다 (사진·영상 파일, 유튜브 링크)'; position: absolute; inset: 0; display: grid; place-items: center;
+  background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--text); font-weight: 800; font-size: 16px; pointer-events: none; z-index: 5; }
 .mbin-head { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
 .mbin-seg { margin: 0; } .mbin-seg button { padding: 2px 10px; flex: none; }
 .mbin-live { font-size: 12px; max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -59,6 +64,8 @@ body.editor .center-main { flex: 1; }
 .mb-item:hover .mb-th { outline-color: var(--line); }
 .mb-item.live .mb-th { outline-color: var(--live); }
 .mb-dur { position: absolute; left: 5px; bottom: 5px; background: rgba(0,0,0,.65); color: #fff; font: 11px/1.4 monospace; padding: 1px 6px; border-radius: 4px; }
+.btn[hidden] { display: none; }
+.mb-dur.mb-yt { background: #e62117; font: 700 11px/1.4 sans-serif; }
 .mb-tag { position: absolute; right: 5px; top: 5px; background: var(--live); color: #fff; font-size: 10px; font-weight: 800; padding: 1px 6px; border-radius: 4px; display: none; }
 .mb-item.live .mb-tag { display: block; }
 .mb-del { position: absolute; right: 5px; bottom: 5px; border: 0; border-radius: 6px; background: rgba(0,0,0,.7); color: #fff; font-size: 14px; line-height: 1; padding: 5px 6px; cursor: pointer; opacity: 0; transition: opacity .12s; }
@@ -189,6 +196,16 @@ dialog::backdrop { background: rgba(10,14,22,.5); }
   .rp-next { --rp: #69db7c; --rp-soft: #1b3323; }
 }
 .sz-v { min-width: 42px; text-align: center; font-size: 13px; font-variant-numeric: tabular-nums; }
+
+/* 유튜브 재생 관리 (유튜브 송출 중일 때만) */
+.yt-ctl { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding-top: 6px; border-top: 1px dashed var(--line); }
+.yt-ctl[hidden] { display: none; }
+.yt-tag { background: #e62117; color: #fff; font-weight: 800; font-size: 11px; padding: 2px 7px; border-radius: 6px; margin-right: 2px; }
+.yt-ctl .btn { flex: 1 1 auto; padding: 4px 6px; font-size: 12.5px; }
+.yt-ctl .yt-main { flex-basis: 30%; font-weight: 700; }
+.yt-ctl .btn.on { background: var(--live); border-color: var(--live); color: #fff; }
+/* 유튜브 관리 줄이 보이면 미리보기를 그만큼 줄여 스크롤이 안 생기게 */
+@media (min-width: 1101px) { body.yt-live .right .wc-screen.pv { height: clamp(80px, calc((100vh - 690px) / 2), 210px); } }
 
 /* ── 오른쪽 패널: 스크롤 없이 한 화면에 (넓은 화면일 때) ──
    미리보기는 화면 높이에 맞춰 줄고(16:9 유지), 칸·메뉴·버튼 간격을 촘촘하게 */

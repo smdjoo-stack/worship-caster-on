@@ -7,6 +7,8 @@
 .wc-text-main { white-space: normal; word-break: keep-all; }
 .wc-ref { color: #ffe9a8; margin-top: 2cqh; font-weight: 700; text-shadow: 0 .3cqh 1cqh rgba(0,0,0,.8); }
 .wc-media { transition: opacity .3s ease; }
+/* 유튜브 배경: 실제 재생이 시작될 때까지 감춤 (유튜브의 시작 화면·버튼·어두운 막 대신 검은 화면) */
+.wc-yt-wait { visibility: hidden; }
 .wc-el { position: absolute; box-sizing: border-box; overflow: hidden; }
 .wc-text { white-space: normal; word-break: keep-all; line-height: 1.25; padding: .6cqh 1cqw; font-family: 'Noto Sans KR', 'Apple SD Gothic Neo', sans-serif; }
 .wc-table { border-collapse: collapse; font-family: 'Noto Sans KR', sans-serif; }

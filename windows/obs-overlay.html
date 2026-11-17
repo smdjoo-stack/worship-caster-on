@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><title>예배송출 OBS 자막 연결</title>
+<style>html,body{margin:0;height:100%;background:transparent;overflow:hidden}</style></head><body>
+<script>
+  // OBS 브라우저 소스용 시작 페이지 (로컬 파일).
+  // 컴퓨터를 켤 때 OBS가 예배송출보다 먼저 열리면 자막 주소를 한 번 못 읽고 멈춤 →
+  // 이 페이지가 2초마다 예배송출이 켜졌는지 확인하고, 켜지면 자막 화면으로 넘어감 (화면은 투명하게 비워 둠)
+  var TARGET = "http://localhost:5300/overlay";
+  function check() {
+    fetch("http://localhost:5300/api/boot", { mode: "no-cors", cache: "no-store" })
+      .then(function () { location.replace(TARGET); })
+      .catch(function () { setTimeout(check, 2000); });
+  }
+  check();
+</script></body></html>
