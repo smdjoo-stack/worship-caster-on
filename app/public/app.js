@@ -217,7 +217,20 @@ async function showObsState() {
   if (Date.now() - obsStateAt < 3000) return; obsStateAt = Date.now();
   const el = $('#obsState'); if (!el) return;
   const s = await api('GET', '/api/obs/status').catch(() => null);
-  el.textContent = !s ? '확인 못 함' : s.connected ? (s.bubble ? '✓ OBS 연결됨 · 둥근 카메라 준비됨' : '✓ OBS 연결됨 · 둥근 카메라 없음') : 'OBS가 꺼져 있거나 원격 제어가 꺼져 있습니다';
+  if (!s) { el.textContent = '확인 못 함'; return; }
+  if (!s.connected) {
+    el.textContent = s.config && !s.config.enabled ? 'OBS → 도구 → WebSocket 서버 설정에서 \'서버 사용\'을 켜 주세요' : 'OBS가 꺼져 있습니다 (켜면 저절로 연결)';
+    return;
+  }
+  if (s.bubble) { el.textContent = '✓ OBS 연결됨 · 둥근 카메라 준비됨'; return; }
+  // 처음 한 번: OBS 지금 방송 장면에 둥근 카메라를 만들어 넣음
+  el.innerHTML = '✓ OBS 연결됨 · 둥근 카메라 없음 <button class="btn sm" id="obsSetup">OBS에 둥근 카메라 만들기</button>';
+  el.querySelector('#obsSetup').onclick = async e => {
+    e.target.disabled = true;
+    try { await api('POST', '/api/obs/setup'); toast('OBS에 둥근 카메라를 만들었습니다. 원 안의 모습은 OBS의 \'설교자 원 (예배송출)\' 장면에서 카메라를 옮겨 맞추세요'); }
+    catch (err) { e.target.disabled = false; }
+    obsStateAt = 0; showObsState();
+  };
 }
 document.querySelectorAll('.ovq [data-ov]').forEach(el => el.addEventListener(el.type === 'range' ? 'input' : 'change', () =>
   setOverlay(el.dataset.ov, el.type === 'checkbox' ? el.checked : el.type === 'range' ? +el.value : el.value)));
