@@ -30,9 +30,24 @@
   const safeOverlay = st => ({
     ...st, font: font(st.font), size: num(st.size, 4.6, 1, 20), color: col(st.color, '#ffffff'), box: col(st.box, '#0b1d3a'),
     boxOpacity: num(st.boxOpacity, 0.72, 0, 1), position: pick(st.position, ['top', 'bottom'], 'bottom'), lineHeight: num(st.lineHeight, 1.35, 0.8, 3),
-    media: pick(st.media, ['none', 'full', 'pip'], 'none'),
+    media: pick(st.media, ['none', 'full', 'pip', 'circle'], 'none'),
     pipSize: num(st.pipSize, 30, 15, 70), pipPos: pick(st.pipPos, ['tr', 'mr', 'br', 'tl', 'ml', 'bl'], 'tr'),
+    // circle: 화면 가득 + 설교자 원 — 원 크기(화면 높이의 %)·위치(br 오른쪽 아래 / bl / tr / tl)
+    circleSize: num(st.circleSize, 32, 15, 60), circlePos: pick(st.circlePos, ['br', 'bl', 'tr', 'tl'], 'br'),
   });
+  // 설교자 원: 화면 가득 이미지에 둥근 구멍을 뚫음 → OBS에서 그 자리에 둥근 카메라가 보임
+  // 원 지름 D = circleSize(화면 높이 %), 가장자리에서 CIRCLE_M 만큼 띄움. 서버(lib/obs.js)도 같은 계산으로 OBS 카메라 위치를 맞춤
+  const CIRCLE_M = 4;
+  function circleHTML(inner, st) {
+    const D = st.circleSize, r = D / 2, c = CIRCLE_M + r, t = 0.7;      // 단위: cqh (화면 높이의 1%)
+    const x = st.circlePos[1] === 'r' ? `calc(100% - ${c}cqh)` : `${c}cqh`, y = st.circlePos[0] === 'b' ? `calc(100% - ${c}cqh)` : `${c}cqh`;
+    const mask = `radial-gradient(circle at ${x} ${y}, transparent ${r}cqh, #000 calc(${r}cqh + 1px))`;
+    const side = `${st.circlePos[1] === 'r' ? 'right' : 'left'}:${CIRCLE_M - t}cqh;${st.circlePos[0] === 'b' ? 'bottom' : 'top'}:${CIRCLE_M - t}cqh`;
+    // 미리보기(운영 화면)에서만 구멍 자리에 '설교자' 표시. 실제 방송(OBS)은 구멍을 비워 카메라가 보이게
+    const ph = PLAYER ? '' : `<div style="position:absolute;inset:0;border-radius:50%;background:#2a2f3a;display:grid;place-items:center;color:#cfd6e4;font:700 ${(D / 7).toFixed(1)}cqh sans-serif">🎥 설교자</div>`;
+    return `<div class="wc-layer"><div style="position:absolute;inset:0;-webkit-mask:${mask};mask:${mask}">${inner}</div>
+      <div style="position:absolute;${side};width:${D}cqh;height:${D}cqh;border:${t}cqh solid rgba(255,255,255,.92);border-radius:50%;box-shadow:0 0 3cqh rgba(0,0,0,.55)">${ph}</div></div>`;
+  }
   const safeEl = e => ({
     ...e, x: num(e.x, 0), y: num(e.y, 0), w: num(e.w, 100, 0), h: num(e.h, 100, 0), size: num(e.size, 24, 1, 400),
     color: col(e.color, '#ffffff'), fill: col(e.fill, null), align: pick(e.align, ['left', 'center', 'right'], 'left'),
@@ -206,6 +221,7 @@
       // 이미지 숨기기는 예배당 화면 전용 — 방송은 '방송에 이미지' 설정을 따름
       const inner = mainHTML({ ...snap, live: { ...L, noImage: false, tvOff: false } }); // 예배당 자막 끄기는 방송에 영향 없음
       if (st.media === 'full') return inner;
+      if (st.media === 'circle') return circleHTML(inner, st);
       // 원래 크기로 그린 뒤 축소 → 글자·HTML 비율이 그대로 유지됨
       // 위치: t 위 / m 중간 / b 아래 × r 오른쪽 / l 왼쪽
       const v = { t: 'top', m: 'center', b: 'bottom' }[st.pipPos[0]] || 'top', h = st.pipPos[1] === 'r' ? 'right' : 'left';

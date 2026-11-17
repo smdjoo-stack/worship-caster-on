@@ -35,6 +35,8 @@ const DEFAULT_STYLE = {
     media: 'none', // [패치] 방송(OBS)에 이미지·악보·HTML 슬라이드: none 안 보냄 / full 화면 가득 / pip 화면 일부
     pipSize: 30,   // [패치] 화면 일부일 때 크기(%)
     pipPos: 'tr',  // [패치] 화면 일부일 때 위치: tr 오른쪽 위 / mr 오른쪽 중간 / br 오른쪽 아래 / tl 왼쪽 위 / ml 왼쪽 중간 / bl 왼쪽 아래
+    circleSize: 32, // 화면 가득 + 설교자 원(media: 'circle'): 원 지름(화면 높이의 %)
+    circlePos: 'br', // 원 위치: br 오른쪽 아래 / bl 왼쪽 아래 / tr 오른쪽 위 / tl 왼쪽 위
     lineHeight: 1.35,
   },
 };
