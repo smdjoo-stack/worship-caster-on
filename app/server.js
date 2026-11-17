@@ -239,6 +239,21 @@ app.put('/api/settings', needLocal, (req, res) => {
   changed(); pushLive(); res.json({ ok: true });
 });
 
+// 유튜브 영상 제목 가져오기 (인터넷 필요). 영상 번호(11자)만 받아 유튜브 공식 oEmbed 로 조회
+app.get('/api/youtube/:id', needAuth, async (req, res) => {
+  const id = String(req.params.id);
+  if (!/^[\w-]{11}$/.test(id)) return res.status(400).json({ error: '유튜브 주소가 올바르지 않습니다' });
+  const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 6000);
+  try {
+    const r = await fetch(`https://www.youtube.com/oembed?format=json&url=${encodeURIComponent('https://www.youtube.com/watch?v=' + id)}`, { signal: ctl.signal });
+    if (r.status === 401 || r.status === 403) return res.json({ id, title: '', embeddable: false });
+    if (!r.ok) return res.status(404).json({ error: '영상을 찾지 못했습니다 (비공개·삭제된 영상일 수 있음)' });
+    const j = await r.json();
+    res.json({ id, title: String(j.title || ''), author: String(j.author_name || ''), embeddable: true });
+  } catch (e) { res.json({ id, title: '', offline: true }); } // 인터넷이 없어도 제목 없이 추가는 되게
+  finally { clearTimeout(t); }
+});
+
 // 가사 가져오기 (인터넷 필요)
 const lyrics = require('./lib/lyrics');
 app.get('/api/lyrics/search', needAuth, async (req, res) => {
@@ -276,7 +291,29 @@ const mediaExt = /\.(png|jpe?g|gif|webp|bmp|mp4|mov|m4v|webm|mp3|m4a|wav|aac)$/i
 app.get('/api/media', needAuth, (req, res) => {
   const files = fs.readdirSync(MEDIA_DIR).filter(f => mediaExt.test(f) && !f.startsWith('ppt_'))
     .map(f => ({ url: '/media/' + f, name: f, size: fs.statSync(path.join(MEDIA_DIR, f)).size }));
-  res.json(files);
+  // 유튜브 배경: 파일이 아니라 주소만 저장 (url = 'yt:영상번호@시작초')
+  const yts = (db.youtubeMedia || []).map(y => ({ url: ytUrl(y), name: y.title || 'YouTube 영상', youtube: y.id, start: y.start || 0 }));
+  res.json([...yts, ...files]);
+});
+
+// 미디어 칸의 유튜브 배경 목록 (db.json 에 저장)
+const YT_URL = /^yt:([\w-]{11})(?:@(\d{1,6}))?$/;
+const ytUrl = y => `yt:${y.id}${y.start ? '@' + y.start : ''}`;
+app.post('/api/media/youtube', needAuth, (req, res) => {
+  const id = String(req.body?.id || ''), start = Math.max(0, Math.floor(+req.body?.start || 0));
+  if (!/^[\w-]{11}$/.test(id)) return res.status(400).json({ error: '유튜브 주소가 올바르지 않습니다' });
+  db.youtubeMedia ||= [];
+  const title = String(req.body?.title || '').trim().slice(0, 120) || 'YouTube 영상';
+  const old = db.youtubeMedia.find(y => y.id === id && (y.start || 0) === start);
+  if (old) old.title = title; else db.youtubeMedia.unshift({ id, start, title, addedAt: Date.now() });
+  changed(); res.json({ url: ytUrl({ id, start }), name: title });
+});
+app.delete('/api/media/youtube/:key', needAuth, (req, res) => {
+  const m = String(req.params.key).match(YT_URL);
+  if (!m) return res.status(400).json({ error: '잘못된 주소' });
+  db.youtubeMedia = (db.youtubeMedia || []).filter(y => ytUrl(y) !== req.params.key);
+  if (live.mediaBg === req.params.key) { live.mediaBg = null; pushLive(); }
+  changed(); res.json({ ok: true });
 });
 app.post('/api/media', needAuth, upload.array('files', 50), (req, res) => {
   const out = [];
@@ -310,6 +347,14 @@ app.post('/api/pptx', needAuth, upload.single('file'), async (req, res) => {
 
 // 송출 제어 (운영 맥 전용)
 // 프로그램 종료 (운영 맥에서만)
+// 유튜브 재생 관리: 운영 화면 버튼 → 예배당 화면·방송 창의 유튜브 플레이어로 그대로 전달 (저장하지 않는 순간 명령)
+const YT_CMDS = ['play', 'pause', 'restart', 'back', 'fwd', 'mute', 'unmute'];
+app.post('/api/youtube-cmd', needLocal, (req, res) => {
+  const cmd = String(req.body?.cmd || '');
+  if (!YT_CMDS.includes(cmd)) return res.status(400).json({ error: '알 수 없는 명령' });
+  broadcast({ type: 'yt', cmd }); res.json({ ok: true });
+});
+
 app.post('/api/quit', needLocal, (req, res) => {
   res.json({ ok: true });
   broadcast({ type: 'quit' });
@@ -328,8 +373,10 @@ app.post('/api/live', needLocal, (req, res) => {
   }
   for (const k of ['black', 'clear', 'logo', 'noImage', 'ovNoImage', 'overlayOff', 'tvOff', 'mediaObs', 'allOff']) if (b[k] !== undefined) live[k] = !!b[k];
   if (b.mediaBg !== undefined) {
-    const ok = typeof b.mediaBg === 'string' && /^\/media\/[^/\\]+$/.test(b.mediaBg) && /\.(png|jpe?g|gif|webp|bmp|mp4|mov|m4v|webm)$/i.test(b.mediaBg)
+    const file = typeof b.mediaBg === 'string' && /^\/media\/[^/\\]+$/.test(b.mediaBg) && /\.(png|jpe?g|gif|webp|bmp|mp4|mov|m4v|webm)$/i.test(b.mediaBg)
       && fs.existsSync(path.join(MEDIA_DIR, path.basename(b.mediaBg)));
+    const yt = typeof b.mediaBg === 'string' && YT_URL.test(b.mediaBg) && (db.youtubeMedia || []).some(y => ytUrl(y) === b.mediaBg);
+    const ok = file || yt;
     live.mediaBg = ok ? b.mediaBg : null;
     if (ok) live.black = false; // 이미지 ON/OFF 와는 따로 작동 (배경을 골라도 이미지 상태는 그대로)
   }

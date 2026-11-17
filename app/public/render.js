@@ -38,10 +38,42 @@
     color: col(e.color, '#ffffff'), fill: col(e.fill, null), align: pick(e.align, ['left', 'center', 'right'], 'left'),
   });
 
+  // 미디어 칸의 유튜브 배경: url = 'yt:영상번호@시작초'. 예배당 화면·방송 창에서만 실제 재생(반복), 나머지는 썸네일
+  const YT_BG = /^yt:([\w-]{11})(?:@(\d+))?$/;
+  function ytBgHTML(url) {
+    const [, id, st] = url.match(YT_BG), start = +st || 0;
+    if (PLAYER) {
+      const q = `autoplay=1&loop=1&playlist=${id}&controls=0&rel=0&playsinline=1&modestbranding=1&disablekb=1&iv_load_policy=3&enablejsapi=1` +
+        `&origin=${encodeURIComponent(location.origin)}${start ? `&start=${start}` : ''}${PLAYER === 'muted' ? '&mute=1' : ''}`;
+      // wc-yt-wait: 실제로 재생이 시작될 때까지 감춤 (유튜브가 처음 몇 초 띄우는 제목·버튼·어두운 막이 안 보이게)
+      return `<iframe class="wc-bg wc-yt wc-yt-wait" data-start="${start}" src="https://www.youtube.com/embed/${id}?${q}" allow="autoplay; encrypted-media"
+        referrerpolicy="strict-origin-when-cross-origin" tabindex="-1" style="border:0;pointer-events:none;background:#000"></iframe>`;
+    }
+    return `<div class="wc-bg" style="background:#000 url('https://i.ytimg.com/vi/${id}/hqdefault.jpg') center/contain no-repeat"></div>`;
+  }
+
   function bgHTML(url, cover = true) {
     if (!url) return '';
+    if (YT_BG.test(url)) return ytBgHTML(url);
     if (isVideo(url)) return `<video class="wc-bg" src="${esc(url)}" autoplay muted loop playsinline></video>`;
     return `<div class="wc-bg" style="background-image:url('${esc(url)}');background-size:${cover ? 'cover' : 'contain'}"></div>`;
+  }
+
+  // 유튜브 슬라이드: 실제 재생은 예배당 화면 창(/output, 소리 O)과 방송(/overlay, 소리 X · '방송에 이미지' 설정을 따름)에서만.
+  // 운영 화면 미리보기·목록·프롬프터는 썸네일 그림 (여러 곳에서 소리가 나면 겹치므로 소리는 예배당 화면 한 곳에서만)
+  const ytId = s => /^[\w-]{11}$/.test(String(s?.youtube || '')) ? s.youtube : null;
+  let PLAYER = false; // 지금 그리는 화면이 실제 재생하는 예배당 화면인지 (render 의 opts.player)
+  function youtubeHTML(s) {
+    const id = ytId(s), start = Math.max(0, Math.floor(+s.start || 0));
+    if (PLAYER) {
+      // enablejsapi: 운영 화면의 재생·일시정지·10초 이동 버튼으로 조작할 수 있게
+      const q = `autoplay=1&rel=0&playsinline=1&modestbranding=1&enablejsapi=1&origin=${encodeURIComponent(location.origin)}${start ? `&start=${start}` : ''}${PLAYER === 'muted' ? '&mute=1' : ''}`;
+      return `<div class="wc-layer" style="background:#000"><iframe class="wc-yt" data-start="${start}" src="https://www.youtube.com/embed/${id}?${q}"
+        allow="autoplay; encrypted-media; picture-in-picture; fullscreen" referrerpolicy="strict-origin-when-cross-origin"
+        style="position:absolute;inset:0;width:100%;height:100%;border:0"></iframe></div>`;
+    }
+    return `<div class="wc-layer" style="background:#000"><div class="wc-bg" style="background-image:url('https://i.ytimg.com/vi/${id}/hqdefault.jpg');background-size:contain"></div>
+      <div style="position:absolute;left:3%;bottom:5%;background:#e62117;color:#fff;font:700 5cqh sans-serif;padding:.6cqh 2cqh;border-radius:1cqh">▶ YouTube</div></div>`;
   }
 
   // HTML 슬라이드: 1920×1080 으로 그린 뒤 화면 크기에 맞춰 축소 (샌드박스 iframe)
@@ -99,6 +131,8 @@
       return `<div class="wc-layer" style="background:#000">${logo}</div>`;
     }
     if (!s) return '<div class="wc-layer"></div>';
+    // 유튜브는 이미지처럼: 이미지 OFF(또는 자막 끄기 + 이미지도 같이 끄기)면 배경 영상 또는 배경색만
+    if (ytId(s)) return noImg ? `<div class="wc-layer" style="background:${media ? 'transparent' : st.bg}"></div>` : youtubeHTML(s);
     const under = media && (!s.bg || noImg); // 이미지를 껐으면 슬라이드 그림 대신 배경 영상이 보이게
     let inner = noImg ? '' : bgHTML(s.bg, s.fit !== 'contain');
     if (!textOff(L)) {
@@ -151,7 +185,11 @@
     const size = f === 'cover' ? 'cover' : 'contain';
     if (m.tagName === 'VIDEO') m.style.objectFit = size; else m.style.backgroundSize = size;
     // small: 화면 가운데 작게 (화면 높이의 40%)
-    Object.assign(m.style, f === 'small' ? { left: '30%', top: '30%', width: '40%', height: '40%' } : { left: '0', top: '0', width: '100%', height: '100%' });
+    const box = f === 'small' ? { l: 30, t: 30, w: 40, h: 40 } : { l: 0, t: 0, w: 100, h: 100 };
+    // 유튜브: 플레이어를 위아래로 15%씩 더 크게 → 영상은 가운데 그대로, 유튜브 제목 줄(위)·로고(아래)는 화면 밖으로
+    const yt = m.tagName === 'IFRAME' ? box.h * 0.15 : 0;
+    Object.assign(m.style, { left: box.l + '%', top: (box.t - yt) + '%', width: box.w + '%', height: (box.h + 2 * yt) + '%' });
+    m.style.clipPath = yt && f === 'small' ? `inset(${(yt / (box.h + 2 * yt) * 100).toFixed(2)}% 0)` : ''; // 작게일 때는 잘라서 칸 밖으로 안 나가게
   }
 
   function hexA(hex, a) {
@@ -162,8 +200,8 @@
   function overlayHTML(snap) {
     const st = safeOverlay(snap.style.overlay), s = snap.slide, L = snap.live;
     if (L.allOff || L.black || L.clear || L.overlayOff || snap.item?.noBroadcast || !s) return '<div class="wc-layer"></div>';
-    // [패치] 이미지·악보·HTML·PPT 슬라이드를 방송에도 내보내기 (자막 스타일의 '방송에 이미지' 설정)
-    const visual = isHtml(s) || (s.elements && s.elements.length) || (s.bg && !String(s.text || '').trim());
+    // [패치] 이미지·악보·HTML·PPT·유튜브 슬라이드를 방송에도 내보내기 (자막 스타일의 '방송에 이미지' 설정)
+    const visual = isHtml(s) || ytId(s) || (s.elements && s.elements.length) || (s.bg && !String(s.text || '').trim());
     if (visual && st.media !== 'none' && !L.ovNoImage) { // 방송 이미지 OFF면 이미지는 빼고 글자 자막만
       // 이미지 숨기기는 예배당 화면 전용 — 방송은 '방송에 이미지' 설정을 따름
       const inner = mainHTML({ ...snap, live: { ...L, noImage: false, tvOff: false } }); // 예배당 자막 끄기는 방송에 영향 없음
@@ -175,7 +213,7 @@
       return `<div class="wc-layer"><div style="position:absolute;${vCss};${h}:3%;width:100%;height:100%;transform:scale(${st.pipSize / 100});transform-origin:${v} ${h};
         border-radius:24px;overflow:hidden;box-shadow:0 10px 40px rgba(0,0,0,.6);outline:6px solid rgba(255,255,255,.85)">${inner}</div></div>`;
     }
-    if (isHtml(s) || !String(s.text || '').trim()) return '<div class="wc-layer"></div>';
+    if (isHtml(s) || ytId(s) || !String(s.text || '').trim()) return '<div class="wc-layer"></div>';
     const title = st.showTitle && (s.ref || (snap.item?.type === 'song' ? snap.item.title : '')) ;
     const pos = st.position === 'top' ? 'top:4cqh' : 'bottom:5cqh';
     return `<div class="wc-layer"><div class="wc-ov" style="${pos};background:${hexA(st.box, st.boxOpacity)};font-family:${st.font}">
@@ -202,6 +240,8 @@
   function render(container, snap, mode, opts = {}) {
     const withMedia = mode === 'main' && opts.media !== false;
     const L = snap.live || {};
+    // 실제 재생: 예배당 화면(/output)은 소리와 함께, 방송(/overlay)은 그림만(소리 항상 끔 — 소리는 한 곳에서만)
+    PLAYER = opts.player ? (mode === 'overlay' ? 'muted' : 'sound') : false;
     if (withMedia) syncMedia(container, L.allOff || mediaOff(snap) ? null : L.mediaBg, L.mediaFit);
     // 방송(OBS)에도 미디어 배경: '방송에도' 가 켜져 있고, 검은화면·방송 자막 끄기가 아닐 때만
     if (mode === 'overlay' && opts.media !== false) syncMedia(container, L.mediaObs && !L.allOff && !L.black && !L.overlayOff ? L.mediaBg : null, L.mediaFit);
