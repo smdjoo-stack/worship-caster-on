@@ -2,7 +2,8 @@
 const IS_EDITOR = location.pathname.startsWith('/editor');
 const $ = s => document.querySelector(s);
 const esc = WC.esc;
-const TYPE = { song: '찬양', bible: '말씀', notice: '광고', ppt: 'PPT', score: '악보·PDF', html: 'HTML', youtube: '유튜브' };
+// score: 예전 '악보·PDF' 자료 (지금은 pdf·image 로 나눔. 혹시 남아 있으면 PDF로 표시)
+const TYPE = { song: '찬양', bible: '말씀', notice: '광고', ppt: 'PPT', pdf: 'PDF', image: '이미지', score: 'PDF', html: 'HTML', youtube: '유튜브' };
 
 // 유튜브 주소 → { id, start } (watch?v= · youtu.be/ · shorts/ · live/ · embed/ 모두, &t=1m30s 시작 시간도)
 function parseYoutube(text) {
@@ -93,7 +94,7 @@ const LIB_CATS = [
   { key: 'all', name: '전체', has: () => true },
   { key: 'song', name: '찬양', has: i => i.type === 'song', abc: true },
   { key: 'notice', name: '광고', has: i => i.type === 'notice' },
-  { key: 'etc', name: '그 외', has: i => i.type !== 'song' && i.type !== 'notice', title: '말씀·PPT·악보' },
+  { key: 'etc', name: '그 외', has: i => i.type !== 'song' && i.type !== 'notice', title: '말씀·PPT·PDF·이미지 등' },
 ];
 let libCat = (() => { try { return localStorage.getItem('wc-libCat') || 'all'; } catch { return 'all'; } })();
 
@@ -558,7 +559,7 @@ function openBible() {
   setTimeout(() => q.focus(), 50);
 }
 
-// PDF·악보: 브라우저에서 PDF 페이지/사진을 이미지로 만들어 슬라이드로
+// PDF·이미지: 브라우저에서 PDF 페이지/사진을 이미지로 만들어 슬라이드로
 let pdfjsLib = null;
 async function loadPdfjs() {
   if (!pdfjsLib) {
@@ -602,24 +603,30 @@ function trimCanvas(c) {
   return o;
 }
 
-function openScore() {
+// 자료실 ＋ PDF / ＋ 이미지: PDF는 페이지마다, 이미지는 장마다 슬라이드 (kind = 'pdf' | 'image')
+function openScore(kind = 'pdf') {
+  const pdf = kind === 'pdf';
   const body = openDlg(`
-    <div class="dlg-head"><h3>PDF·악보 가져오기</h3><button class="icon" data-x>✕</button></div>
+    <div class="dlg-head"><h3>${pdf ? 'PDF 가져오기' : '이미지 가져오기'}</h3><button class="icon" data-x>✕</button></div>
     <div class="form">
-      <label>파일</label><input type="file" id="scFiles" multiple accept="application/pdf,image/*">
+      <label>파일</label><input type="file" id="scFiles" multiple accept="${pdf ? 'application/pdf,.pdf' : 'image/png,image/jpeg,image/gif,image/webp,image/bmp'}">
       <label>제목</label><input id="scTitle" placeholder="비우면 파일 이름">
-      <label>한 페이지 나누기</label><select id="scSplit"><option value="1">나누지 않음 (PDF 문서·주보)</option><option value="2" selected>위·아래 2칸 (악보 권장)</option><option value="3">3칸</option><option value="4">4칸</option></select>
-      <label>흰 여백 잘라내기</label><input type="checkbox" id="scTrim" checked>
-      <label>배경색</label><div class="row"><select id="scBg" style="width:auto"><option value="#ffffff">흰색 (악보)</option><option value="#000000">검정</option></select></div>
+      <label>한 장 나누기</label><select id="scSplit"><option value="1" selected>나누지 않음</option><option value="2">위·아래 2칸</option><option value="3">3칸</option><option value="4">4칸</option></select>
+      <label>흰 여백 잘라내기</label><input type="checkbox" id="scTrim" ${pdf ? 'checked' : ''}>
+      <label>배경색</label><div class="row"><select id="scBg" style="width:auto"><option value="#ffffff" ${pdf ? 'selected' : ''}>흰색</option><option value="#000000" ${pdf ? '' : 'selected'}>검정</option></select></div>
     </div>
-    <p class="muted small">PDF는 페이지마다, 사진(jpg·png)은 장마다 슬라이드가 됩니다. 악보는 화면 비율(16:9)에 맞게 위·아래로 나누면 TV에서 훨씬 크게 보입니다.
-    악보 슬라이드는 기본으로 예배당 화면에만 나갑니다. 방송(OBS)에도 보내려면 🎨 자막 스타일 → '방송에 이미지'를 바꾸세요.</p>
+    <p class="muted small">${pdf ? 'PDF는 페이지마다 슬라이드가 됩니다.' : '사진(jpg·png·gif·webp)은 한 장마다 슬라이드가 됩니다. 여러 장을 한꺼번에 고를 수 있습니다.'}
+    세로로 긴 페이지는 '위·아래 2칸'으로 나누면 TV에서 훨씬 크게 보입니다.
+    기본으로 예배당 화면에 나가고, 방송(OBS)에는 🎨 자막 스타일 → '방송에 이미지' 설정대로 나갑니다.</p>
     <div id="scProg" class="muted"></div>
     <div class="dlg-foot"><button class="btn" data-x>취소</button><button class="btn primary" id="scGo">가져오기</button></div>`);
   body.querySelectorAll('[data-x]').forEach(b => (b.onclick = closeDlg));
   body.querySelector('#scGo').onclick = async () => {
-    const files = [...body.querySelector('#scFiles').files];
-    if (!files.length) return toast('파일을 고르세요');
+    // PDF 창에서는 PDF만, 이미지 창에서는 사진만 받음
+    const all = [...body.querySelector('#scFiles').files];
+    const files = all.filter(f => pdf ? (f.type === 'application/pdf' || /\.pdf$/i.test(f.name)) : /\.(png|jpe?g|gif|webp|bmp)$/i.test(f.name));
+    if (!files.length) return toast(pdf ? 'PDF 파일을 고르세요' : '사진 파일(jpg·png 등)을 고르세요');
+    if (files.length < all.length) toast(`${pdf ? 'PDF' : '사진'}가 아닌 파일 ${all.length - files.length}개는 뺐습니다`);
     const n = +body.querySelector('#scSplit').value, trim = body.querySelector('#scTrim').checked, bgColor = body.querySelector('#scBg').value;
     const prog = body.querySelector('#scProg'), go = body.querySelector('#scGo'); go.disabled = true;
     const pages = []; // { canvas, name }
@@ -652,7 +659,7 @@ function openScore() {
         up.forEach(u => slides.push({ text: '', bg: u.url, fit: 'contain', bgColor }));
       }
       const title = body.querySelector('#scTitle').value || files[0].name.replace(/\.[^.]+$/, '');
-      const it = await api('POST', '/api/items', { type: 'score', title, slides });
+      const it = await api('POST', '/api/items', { type: pdf ? 'pdf' : 'image', title, slides });
       if (service()) await saveService([...service().itemIds, it.id]);
       selId = it.id; closeDlg(); toast(`슬라이드 ${slides.length}장을 만들었습니다`);
     } catch (e) { console.error(e); prog.textContent = '가져오기 실패: ' + e.message; go.disabled = false; }
@@ -879,7 +886,7 @@ function openStyle() {
         <label>바 불투명도</label><input type="range" id="o_boxOpacity" min="0" max="1" step="0.05" value="${esc(st.overlay.boxOpacity)}">
         <label>위치</label><select id="o_position"><option value="bottom" ${st.overlay.position === 'bottom' ? 'selected' : ''}>아래</option><option value="top" ${st.overlay.position === 'top' ? 'selected' : ''}>위</option></select>
         <label>곡명·구절 표시</label><input type="checkbox" id="o_showTitle" ${st.overlay.showTitle ? 'checked' : ''}>
-        <label>방송에 이미지</label><select id="o_media" title="악보·사진·HTML·PPT 슬라이드를 방송(OBS)에도 내보낼지">
+        <label>방송에 이미지</label><select id="o_media" title="PDF·이미지·HTML·PPT 슬라이드를 방송(OBS)에도 내보낼지">
           ${[['none', '내보내지 않음 (자막만)'], ['full', '화면 가득'], ['pip', '화면 일부 (설교자 보이게)']].map(([v, t]) => `<option value="${v}" ${(st.overlay.media || 'none') === v ? 'selected' : ''}>${t}</option>`).join('')}
         </select>
         <label>일부 — 크기</label><input type="range" id="o_pipSize" min="15" max="70" step="1" value="${esc(st.overlay.pipSize ?? 30)}">
@@ -994,7 +1001,7 @@ function openSettings() {
       <label>타이틀 로고</label><div class="row">${S.settings.titleLogo ? `<img src="${esc(S.settings.titleLogo)}" style="height:28px">` : '<span class="muted">✝ (기본)</span>'}<button class="btn" id="stTitleLogo">로고 선택</button>${S.settings.titleLogo ? '<button class="btn" id="stTitleLogoOff">✝ 로 되돌리기</button>' : ''}
         <span class="muted small">운영 화면 맨 위 '예배송출' 앞에 붙는 작은 로고</span></div>
       <label>모든 자막 끄기 (C) 할 때 이미지</label><div class="row"><select id="stClearImages">
-          <option value="keep"${S.settings.clearImages !== 'hide' ? ' selected' : ''}>이미지는 계속 보이기 (사진·악보·배경 영상)</option>
+          <option value="keep"${S.settings.clearImages !== 'hide' ? ' selected' : ''}>이미지는 계속 보이기 (사진·PDF·배경 영상)</option>
           <option value="hide"${S.settings.clearImages === 'hide' ? ' selected' : ''}>이미지도 같이 끄기</option>
         </select><span class="muted small">고르면 바로 저장됩니다</span></div>
       <label>성경 폴더</label><div>
@@ -1054,7 +1061,8 @@ function bind() {
   $('#newSong').onclick = () => openItemEditor(null);
   $('#newNotice').onclick = () => { openItemEditor(null); $('#eType').value = 'notice'; $('#eType').dispatchEvent(new Event('change')); $('#eTitle').value = '광고'; $('#eTitle').dispatchEvent(new Event('input')); };
   $('#newBible').onclick = openBible;
-  $('#newScore').onclick = openScore;
+  $('#newPdf').onclick = () => openScore('pdf');
+  $('#newImage').onclick = () => openScore('image');
   $('#pptFile').onchange = async e => {
     const f = e.target.files[0]; if (!f) return;
     const fd = new FormData(); fd.append('file', f);
