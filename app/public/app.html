@@ -75,6 +75,8 @@
     </div>
     <!-- 미디어 칸: 누르면 예배당 화면 배경으로 계속 나옴 (영상은 소리 없이 반복) -->
     <div class="mbin ctrl-only">
+      <!-- 미디어 칸 높이 조절: 위아래로 끌기, 두 번 누르면 처음 크기 -->
+      <div class="split-h" id="mbSplit" title="위아래로 끌어 미디어 칸 높이 조절 (두 번 누르면 처음 크기)"></div>
       <div class="mbin-head">
         <b>🎞 미디어</b>
         <div class="seg mbin-seg" id="mbFilter">
@@ -96,6 +98,8 @@
     </div>
   </section>
 
+  <!-- 오른쪽 칸 너비 조절: 좌우로 끌기, 두 번 누르면 처음 크기 -->
+  <div class="split-v ctrl-only" id="rpSplit" title="좌우로 끌어 오른쪽 칸 너비 조절 (두 번 누르면 처음 크기)"></div>
   <aside class="right ctrl-only">
     <section class="rp rp-tv">
       <div class="pv-label"><span class="rp-tag">📺 예배당 화면</span> <span id="liveInfo" class="muted"></span><span class="sz" title="예배당 화면 글자 크기 ( [ / ] 키 )"><button class="sz-b tv-off" id="tvImg" title="예배당 TV(·프롬프터) 이미지 켜기/끄기 — 사진·PDF·PPT 그림. 글자·배경 영상은 그대로 (I 키)">이미지 ON</button><button class="sz-b tv-off" id="tvOff" title="예배당 TV(·프롬프터) 자막 켜기/끄기. 유튜브(OBS) 자막은 그대로 나갑니다 (T 키)">자막 ON</button><button class="sz-b" data-sz="main" data-d="-1">A−</button><b id="sz_main">-</b><button class="sz-b" data-sz="main" data-d="1">A+</button></span></div>
@@ -108,7 +112,13 @@
         <label>미디어 배경</label>
         <label class="ovq-chk"><input type="checkbox" id="ovMediaObs"> 방송에도 똑같이 내보내기</label>
         <label>방송에 이미지</label>
-        <select data-ov="media"><option value="none">내보내지 않음 (자막만)</option><option value="full">화면 가득</option><option value="pip">화면 일부 (설교자 보이게)</option></select>
+        <select data-ov="media"><option value="none">내보내지 않음 (자막만)</option><option value="full">화면 가득</option><option value="pip">화면 일부 (설교자 보이게)</option><option value="circle">화면 가득 + 설교자 원</option></select>
+        <label class="circle-only">원 — 크기</label>
+        <div class="row circle-only"><input type="range" data-ov="circleSize" min="15" max="60" step="1"><span class="ovq-v" data-ovv="circleSize"></span></div>
+        <label class="circle-only">원 — 위치</label>
+        <select class="circle-only" data-ov="circlePos"><option value="br">오른쪽 아래</option><option value="bl">왼쪽 아래</option><option value="tr">오른쪽 위</option><option value="tl">왼쪽 위</option></select>
+        <label class="circle-only">OBS 카메라</label>
+        <div class="row circle-only"><span id="obsState" class="muted small">확인 중…</span></div>
         <label class="pip-only">일부 — 크기</label>
         <div class="row pip-only"><input type="range" data-ov="pipSize" min="15" max="70" step="1"><span class="ovq-v" data-ovv="pipSize"></span></div>
         <label class="pip-only">일부 — 위치</label>

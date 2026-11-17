@@ -34,7 +34,13 @@ kbd { font: 11px monospace; opacity: .6; }
 .brand-cross { display: block; }
 .tag { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 99px; background: var(--chip); color: var(--muted); vertical-align: middle; }
 
-.layout { flex: 1; display: grid; grid-template-columns: 290px 1fr 420px; min-height: 0; }
+/* 왼쪽 290px 고정 · 가운데 · 끌기 막대 · 오른쪽(--rw, 끌어서 조절) */
+.layout { flex: 1; display: grid; grid-template-columns: 290px 1fr 6px var(--rw, 420px); min-height: 0; }
+.split-v { cursor: col-resize; background: var(--line); transition: background .15s; touch-action: none; }
+.split-h { flex: none; height: 6px; margin-bottom: -1px; cursor: row-resize; background: var(--line); transition: background .15s; touch-action: none; }
+.split-v:hover, .split-v.drag, .split-h:hover, .split-h.drag { background: var(--accent); }
+body.resizing, body.resizing * { user-select: none !important; }
+body.resizing iframe, body.resizing video { pointer-events: none; }
 body.editor .layout { grid-template-columns: 290px 1fr; }
 body.editor .ctrl-only { display: none !important; }
 .left, .right { background: var(--panel); border-right: 1px solid var(--line); padding: 12px; overflow: auto; display: flex; flex-direction: column; gap: 14px; }
@@ -44,7 +50,7 @@ body.editor .ctrl-only { display: none !important; }
 .center-main { flex: 1; min-height: 0; overflow: auto; padding: 14px 18px; }
 body.editor .center-main { flex: 1; }
 /* 미디어 칸 (아래쪽) */
-.mbin { --mb: 170px; flex: none; height: clamp(220px, 36vh, 380px); display: flex; flex-direction: column; background: var(--panel); border-top: 1px solid var(--line); }
+.mbin { --mb: 170px; flex: none; height: var(--mbh, clamp(220px, 36vh, 380px)); display: flex; flex-direction: column; background: var(--panel); border-top: 1px solid var(--line); }
 /* 끌어다 놓는 중: 미디어 칸 강조 + 안내 */
 .mbin { position: relative; }
 .mbin.drop { outline: 3px dashed var(--accent); outline-offset: -6px; }
@@ -131,6 +137,7 @@ dialog::backdrop { background: rgba(10,14,22,.5); }
 @media (max-width: 1100px) {
   .layout { grid-template-columns: 250px 1fr; }
   .right { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--line); }
+  .split-v { display: none; }
 }
 @media (max-width: 700px) {
   .layout, body.editor .layout { grid-template-columns: 1fr; }
@@ -186,6 +193,7 @@ dialog::backdrop { background: rgba(10,14,22,.5); }
 .ovq input[type=checkbox] { justify-self: start; width: 16px; height: 16px; accent-color: var(--rp); }
 .ovq-v { min-width: 38px; text-align: right; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .ovq.no-pip .pip-only { display: none; }
+.ovq.no-circle .circle-only { display: none; }
 .ovq .ovq-chk { display: inline-flex; align-items: center; gap: 6px; color: var(--text); font-size: 13px; cursor: pointer; }
 .rp-help { margin: 0 4px; }
 @media (prefers-color-scheme: dark) {
@@ -205,7 +213,7 @@ dialog::backdrop { background: rgba(10,14,22,.5); }
 .yt-ctl .yt-main { flex-basis: 30%; font-weight: 700; }
 .yt-ctl .btn.on { background: var(--live); border-color: var(--live); color: #fff; }
 /* 유튜브 관리 줄이 보이면 미리보기를 그만큼 줄여 스크롤이 안 생기게 */
-@media (min-width: 1101px) { body.yt-live .right .wc-screen.pv { height: clamp(80px, calc((100vh - 690px) / 2), 210px); } }
+@media (min-width: 1101px) { body.yt-live .right .wc-screen.pv { height: clamp(80px, calc((100vh - 690px) / 2), calc((var(--rw, 420px) - 54px) * 0.5625)); } }
 
 /* ── 오른쪽 패널: 스크롤 없이 한 화면에 (넓은 화면일 때) ──
    미리보기는 화면 높이에 맞춰 줄고(16:9 유지), 칸·메뉴·버튼 간격을 촘촘하게 */
@@ -213,7 +221,7 @@ dialog::backdrop { background: rgba(10,14,22,.5); }
   .right { padding: 8px; gap: 8px; }
   .rp { padding: 6px 10px 8px; gap: 6px; border-top-width: 3px; }
   .rp-tag { padding: 2px 8px; font-size: 12px; }
-  .right .wc-screen.pv { height: clamp(90px, calc((100vh - 640px) / 2), 210px); width: auto; max-width: 100%; align-self: center; }
+  .right .wc-screen.pv { height: clamp(90px, calc((100vh - 640px) / 2), calc((var(--rw, 420px) - 54px) * 0.5625)); width: auto; max-width: 100%; align-self: center; }
   .ovq { gap: 3px 8px; grid-template-columns: 84px 1fr; padding-top: 3px; }
   .ovq label { font-size: 11.5px; }
   .ovq select { padding: 2px 6px; font-size: 12px; }

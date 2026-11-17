@@ -193,7 +193,7 @@ function setOverlay(key, val) {
     try { await api('PUT', '/api/style', send); } finally { if (sizePending === send) sizePending = null; }
   }, 200);
 }
-const OV_DEF = { media: 'none', pipSize: 30, pipPos: 'tr', position: 'bottom', boxOpacity: 0.72, showTitle: false };
+const OV_DEF = { media: 'none', pipSize: 30, pipPos: 'tr', circleSize: 32, circlePos: 'br', position: 'bottom', boxOpacity: 0.72, showTitle: false };
 function showOverlayQuick() {
   const st = curStyle(), box = document.querySelector('.ovq');
   if (!st || !box) return;
@@ -208,6 +208,16 @@ function showOverlayQuick() {
     el.textContent = el.dataset.ovv === 'boxOpacity' ? Math.round(v * 100) + '%' : v + '%';
   });
   box.classList.toggle('no-pip', (o.media || 'none') !== 'pip');
+  box.classList.toggle('no-circle', o.media !== 'circle');
+  if (o.media === 'circle') showObsState();
+}
+// '화면 가득 + 설교자 원'일 때: OBS 둥근 카메라 연결 상태 표시
+let obsStateAt = 0;
+async function showObsState() {
+  if (Date.now() - obsStateAt < 3000) return; obsStateAt = Date.now();
+  const el = $('#obsState'); if (!el) return;
+  const s = await api('GET', '/api/obs/status').catch(() => null);
+  el.textContent = !s ? '확인 못 함' : s.connected ? (s.bubble ? '✓ OBS 연결됨 · 둥근 카메라 준비됨' : '✓ OBS 연결됨 · 둥근 카메라 없음') : 'OBS가 꺼져 있거나 원격 제어가 꺼져 있습니다';
 }
 document.querySelectorAll('.ovq [data-ov]').forEach(el => el.addEventListener(el.type === 'range' ? 'input' : 'change', () =>
   setOverlay(el.dataset.ov, el.type === 'checkbox' ? el.checked : el.type === 'range' ? +el.value : el.value)));
@@ -887,7 +897,7 @@ function openStyle() {
         <label>위치</label><select id="o_position"><option value="bottom" ${st.overlay.position === 'bottom' ? 'selected' : ''}>아래</option><option value="top" ${st.overlay.position === 'top' ? 'selected' : ''}>위</option></select>
         <label>곡명·구절 표시</label><input type="checkbox" id="o_showTitle" ${st.overlay.showTitle ? 'checked' : ''}>
         <label>방송에 이미지</label><select id="o_media" title="PDF·이미지·HTML·PPT 슬라이드를 방송(OBS)에도 내보낼지">
-          ${[['none', '내보내지 않음 (자막만)'], ['full', '화면 가득'], ['pip', '화면 일부 (설교자 보이게)']].map(([v, t]) => `<option value="${v}" ${(st.overlay.media || 'none') === v ? 'selected' : ''}>${t}</option>`).join('')}
+          ${[['none', '내보내지 않음 (자막만)'], ['full', '화면 가득'], ['pip', '화면 일부 (설교자 보이게)'], ['circle', '화면 가득 + 설교자 원']].map(([v, t]) => `<option value="${v}" ${(st.overlay.media || 'none') === v ? 'selected' : ''}>${t}</option>`).join('')}
         </select>
         <label>일부 — 크기</label><input type="range" id="o_pipSize" min="15" max="70" step="1" value="${esc(st.overlay.pipSize ?? 30)}">
         <label>일부 — 위치</label><select id="o_pipPos">
@@ -1161,5 +1171,38 @@ function bind() {
   const first = service()?.itemIds[0];
   if (first) select(first);
   initMediaBin();
+  initSplitters();
   connectWS();
 })();
+
+// ── 칸 크기 조절: 오른쪽 칸 너비(좌우로 끌기) · 미디어 칸 높이(위아래로 끌기). 왼쪽 메뉴는 고정 ──
+// 이 컴퓨터에 기억(localStorage). 막대를 두 번 누르면 처음 크기로
+function initSplitters() {
+  if (IS_EDITOR) return;
+  const layout = $('.layout'), mbin = $('.mbin'), center = $('.center');
+  const load = k => { try { return +localStorage.getItem(k) || 0; } catch (e) { return 0; } };
+  const save = (k, v) => { try { v ? localStorage.setItem(k, Math.round(v)) : localStorage.removeItem(k); } catch (e) {} };
+  const clampW = w => Math.max(320, Math.min(w, innerWidth - 290 - 420));    // 가운데가 최소 420px은 남게
+  const clampH = h => Math.max(120, Math.min(h, center.clientHeight - 160)); // 슬라이드 칸이 최소 160px은 남게
+  const setW = w => w ? layout.style.setProperty('--rw', clampW(w) + 'px') : layout.style.removeProperty('--rw');
+  const setH = h => h ? mbin.style.setProperty('--mbh', clampH(h) + 'px') : mbin.style.removeProperty('--mbh');
+  setW(load('wc-right-w')); setH(load('wc-media-h'));
+  const drag = (bar, onMove, onEnd) => {
+    bar.addEventListener('pointerdown', e => {
+      if (e.button !== 0) return;
+      e.preventDefault(); bar.setPointerCapture(e.pointerId); bar.classList.add('drag'); document.body.classList.add('resizing');
+      const move = ev => onMove(ev);
+      const up = () => { bar.removeEventListener('pointermove', move); bar.classList.remove('drag'); document.body.classList.remove('resizing'); onEnd(); };
+      bar.addEventListener('pointermove', move);
+      bar.addEventListener('pointerup', up, { once: true });
+      bar.addEventListener('pointercancel', up, { once: true });
+    });
+  };
+  const rp = $('#rpSplit'), mb = $('#mbSplit');
+  drag(rp, e => setW(layout.getBoundingClientRect().right - e.clientX - 3), () => save('wc-right-w', parseFloat(layout.style.getPropertyValue('--rw'))));
+  drag(mb, e => setH(center.getBoundingClientRect().bottom - e.clientY - 3), () => save('wc-media-h', parseFloat(mbin.style.getPropertyValue('--mbh'))));
+  rp.ondblclick = () => { setW(0); save('wc-right-w', 0); toast('오른쪽 칸을 처음 너비로 되돌렸습니다'); };
+  mb.ondblclick = () => { setH(0); save('wc-media-h', 0); toast('미디어 칸을 처음 높이로 되돌렸습니다'); };
+  // 창 크기가 바뀌면 너무 크거나 작지 않게 다시 맞춤
+  addEventListener('resize', () => { if (load('wc-right-w')) setW(load('wc-right-w')); if (load('wc-media-h')) setH(load('wc-media-h')); });
+}

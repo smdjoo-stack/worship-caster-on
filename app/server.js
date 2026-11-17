@@ -203,8 +203,8 @@ app.put('/api/current-service', needAuth, (req, res) => { db.currentServiceId = 
 const STYLE_RULES = {
   color: 'color', stroke: 'color', bg: 'color', box: 'color',
   size: [1, 30], strokeWidth: [0, 10], lineHeight: [0.8, 3], boxOpacity: [0, 1],
-  align: ['left', 'center', 'right'], valign: ['top', 'middle', 'bottom'], position: ['top', 'bottom'], media: ['none', 'full', 'pip'],
-  pipSize: [15, 70], pipPos: ['tr', 'mr', 'br', 'tl', 'ml', 'bl'],
+  align: ['left', 'center', 'right'], valign: ['top', 'middle', 'bottom'], position: ['top', 'bottom'], media: ['none', 'full', 'pip', 'circle'],
+  pipSize: [15, 70], pipPos: ['tr', 'mr', 'br', 'tl', 'ml', 'bl'], circleSize: [15, 60], circlePos: ['br', 'bl', 'tr', 'tl'],
   bold: 'bool', shadow: 'bool', showTitle: 'bool', font: 'font',
 };
 function cleanStyle(src, base) {
@@ -401,7 +401,24 @@ function broadcast(msg) {
   const s = JSON.stringify(msg);
   for (const c of wss.clients) if (c.readyState === 1) c.send(s);
 }
-function pushLive() { live.rev++; broadcast(snapshot()); }
+function pushLive() { live.rev++; broadcast(snapshot()); obs.sync(); }
+
+// ── OBS '설교자 원' (방송에 이미지: 화면 가득 + 설교자 원) ──
+// 방송 화면에 이미지·PDF·PPT·HTML·유튜브 장이 가득 나갈 때만 OBS의 둥근 카메라를 켬 (render.js overlayHTML 과 같은 조건)
+const obs = require('./lib/obs');
+function obsState() {
+  const st = db.style.overlay || {}, item = db.items.find(i => i.id === live.itemId), s = item?.slides[live.index];
+  const visual = s && (/^\/slides\/[a-f0-9]{12}\.html$/.test(String(s.html || '')) || /^[\w-]{11}$/.test(String(s.youtube || ''))
+    || (s.elements && s.elements.length) || (s.bg && !String(s.text || '').trim()));
+  const off = live.allOff || live.black || live.clear || live.overlayOff || live.ovNoImage || item?.noBroadcast;
+  return { show: st.media === 'circle' && !!visual && !off, size: Math.min(60, Math.max(15, +st.circleSize || 32)), pos: ['br', 'bl', 'tr', 'tl'].includes(st.circlePos) ? st.circlePos : 'br' };
+}
+obs.start(obsState);
+app.get('/api/obs/status', needAuth, (req, res) => res.json(obs.status()));
+// 처음 한 번: OBS에 둥근 카메라 만들기 (OBS가 켜져 있고 원격 제어가 켜져 있어야 함)
+app.post('/api/obs/setup', needLocal, async (req, res) => {
+  try { res.json(await obs.setup(store.DATA_DIR)); } catch (e) { res.status(502).json({ error: e.message }); }
+});
 wss.on('connection', ws => ws.send(JSON.stringify(snapshot())));
 wss.on('error', () => {}); // 포트 문제는 아래 server.on('error') 에서 처리
 
