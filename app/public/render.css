@@ -20,23 +20,23 @@
 .wc-ov-text { word-break: keep-all; text-shadow: 0 .2cqh .6cqh rgba(0,0,0,.6); }
 
 /* 프롬프터 */
-.wc-stage { background: #0d0f14; color: #fff; font-family: 'Noto Sans KR', sans-serif; display: flex; flex-direction: column; padding: 2cqh 3cqw; box-sizing: border-box; }
-.wc-st-top { display: flex; gap: 3cqw; font-size: 3.6cqh; margin-bottom: 1cqh; color: #9aa4b8; align-items: center; }
+.wc-stage { background: #0d0f14; color: #fff; font-family: "Noto Sans KR", sans-serif; display: flex; flex-direction: column; padding: 1.2cqh 1.5cqw; box-sizing: border-box; }
+.wc-st-top { display: flex; gap: 3cqw; font-size: 3cqh; color: #9aa4b8; align-items: center; }
 .wc-st-top span:first-child { color: #fff; font-weight: 700; flex: 1; }
 .wc-st-status { color: #ff6b6b; }
-.wc-clock { font-size: 5cqh; color: #7ee0a1; font-weight: 700; }
-/* 프롬프터: 위 = 지금 슬라이드 가사(크게), 아래 = 다음 슬라이드 가사(작게·흐리게) */
-/* 글자는 최대 크기로 그리고, 넘치면 render.js fitStage 가 줄임 */
-.wc-st-cur, .wc-st-next { display: flex; gap: 2cqw; align-items: center; min-height: 0; overflow: hidden; word-break: keep-all; }
-.wc-st-cur { flex: 64 1 0; font-size: 26cqh; font-weight: 900; line-height: 1.15; color: #fff; padding: 1cqh 0; }
-.wc-st-next { flex: 36 1 0; font-size: 15cqh; font-weight: 800; line-height: 1.15; color: #d6deec; border-top: .3cqh solid #3a4458; padding-top: 1.5cqh; }
-.wc-st-label { flex: none; align-self: flex-start; margin-top: 1cqh; font-size: 3cqh; font-weight: 800; padding: .6cqh 1cqw; border-radius: 1cqh; writing-mode: vertical-rl; letter-spacing: .3em; }
+.wc-clock { font-size: 4cqh; color: #7ee0a1; font-weight: 700; }
+/* 위 = 지금 슬라이드 가사(화면 대부분), 아래 = 다음 슬라이드 가사
+   글자는 아주 크게 시작해서, 칸을 넘치면 render.js fitStage 가 들어갈 때까지 줄임 */
+.wc-st-cur, .wc-st-next { position: relative; display: flex; align-items: center; min-height: 0; overflow: hidden; word-break: keep-all; letter-spacing: -.02em; }
+.wc-st-cur { flex: 74 1 0; font-size: 52cqh; font-weight: 900; line-height: 1.12; color: #fff; }
+.wc-st-next { flex: 26 1 0; font-size: 30cqh; font-weight: 800; line-height: 1.12; color: #d6deec; border-top: .4cqh solid #3a4458; }
+.wc-st-label { position: absolute; left: 0; top: .8cqh; z-index: 1; font-size: 2.4cqh; font-weight: 800; padding: .3cqh .8cqw; border-radius: .8cqh; letter-spacing: .1em; }
 .wc-st-cur .wc-st-label { background: #c0392b; color: #fff; }
 .wc-st-next .wc-st-label { background: #2c5aa0; color: #fff; }
-.wc-st-body { flex: 1; min-width: 0; max-height: 100%; overflow: hidden; }
+.wc-st-body { flex: 1; min-width: 0; max-height: 100%; overflow: hidden; text-align: center; white-space: nowrap; } /* 가사 줄은 쓴 그대로 (넘치면 글씨를 줄임) */
 .wc-st-cur .wc-st-body { text-shadow: 0 .3cqh .6cqh #000; }
-.wc-st-ref { font-size: .4em; color: #ffd76a; margin-top: 1.5cqh; font-weight: 600; }
-.wc-st-note { color: #7b859a; font-weight: 600; font-size: .6em; }
+.wc-st-ref { letter-spacing: normal; font-size: max(.3em, 5cqh); color: #ffd76a; margin-top: 1cqh; font-weight: 600; }
+.wc-st-cur .wc-st-note, .wc-st-next .wc-st-note { color: #7b859a; font-weight: 600; font-size: 9cqh; }
 
 /* HTML 슬라이드: 1920×1080 으로 그린 뒤 축소 */
 .wc-html { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; border: 0; transform-origin: 0 0; pointer-events: none; background: #000; }

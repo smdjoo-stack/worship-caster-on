@@ -262,8 +262,17 @@
     for (const b of layer.querySelectorAll('.wc-st-body')) {
       const row = b.parentElement, cs = getComputedStyle(row);
       const avail = row.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
-      let px = parseFloat(getComputedStyle(b).fontSize), min = px * 0.3;
-      while ((b.scrollHeight > avail + 1 || b.scrollWidth > b.clientWidth + 1) && px > min) { px *= 0.95; b.style.fontSize = px + 'px'; }
+      const start = parseFloat(getComputedStyle(b).fontSize);
+      const fit = min => {
+        let px = start; b.style.fontSize = px + 'px';
+        while ((b.scrollHeight > avail + 1 || b.scrollWidth > b.clientWidth + 1) && px > min) { px *= 0.95; b.style.fontSize = px + 'px'; }
+        return px;
+      };
+      // 가사 줄을 쓴 그대로(줄바꿈 없이) 맞춘 크기와, 자동 줄바꿈으로 맞춘 크기를 비교.
+      // 줄바꿈 쪽이 1.5배 넘게 크면(성경 구절처럼 한 줄이 아주 긴 글) 줄바꿈, 아니면 쓴 줄 그대로
+      const keep = fit(start * 0.1);
+      b.style.whiteSpace = 'normal';
+      if (fit(start * 0.1) < keep * 1.5) { b.style.whiteSpace = ''; fit(start * 0.1); }
     }
   }
 
