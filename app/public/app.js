@@ -469,7 +469,7 @@ function openItemEditor(id, focusIndex) {
     lyrCache[r.id] = res;
     if (!res.lyrics) { li?.querySelector('.muted')?.append(' · 가사 없음'); lyrMsg.textContent = `'${r.artist}' 음원에는 가사가 없습니다. 다른 음원을 고르세요.`; return false; }
     body.querySelector('#ePaste').value = res.lyrics;
-    lyrMsg.textContent = `✓ ${res.title} — ${res.artist} 가사를 채웠습니다. 확인·수정 후 '나누어 슬라이드 만들기'를 누르세요. (출처: 벅스)`;
+    lyrMsg.textContent = `✓ ${res.title} — ${res.artist} 가사를 채웠습니다. 확인·수정 후 '나누어 슬라이드 만들기'를 누르세요. (출처: 지니)`;
     return true;
   };
   body.querySelector('#eLyrGet').onclick = async () => {
@@ -478,7 +478,7 @@ function openItemEditor(id, focusIndex) {
     lyrBox.hidden = false; lyrList.innerHTML = ''; lyrMsg.textContent = `'${title}' 검색 중…`;
     let results;
     try { results = await api('GET', '/api/lyrics/search?q=' + encodeURIComponent(title)); } catch (e) { lyrMsg.textContent = e.message || '검색 실패'; return; }
-    if (!results.length) { lyrMsg.textContent = `벅스에 '${title}' 음원이 없습니다. 제목만 정확히 쓰거나(키·괄호 빼고), 위의 [구글]·[네이버] 버튼으로 찾아 붙여넣으세요.`; return; }
+    if (!results.length) { lyrMsg.textContent = `지니에 '${title}' 음원이 없습니다. 제목만 정확히 쓰거나(키·괄호 빼고), 위의 [구글]·[네이버] 버튼으로 찾아 붙여넣으세요.`; return; }
     const lis = results.map(r => {
       const li = document.createElement('li');
       li.innerHTML = `<span class="t">${esc(r.title)} <span class="muted small">${esc(r.artist)}</span></span>`;
