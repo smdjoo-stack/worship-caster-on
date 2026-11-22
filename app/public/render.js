@@ -243,11 +243,28 @@
     const now = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
     const status = (L.allOff ? '✖ 모두 꺼짐' : L.black ? '■ 검은 화면' : L.clear ? '◻ 모든 자막 꺼짐' : L.tvOff ? '📺 예배당 자막 꺼짐' : '● 송출 중') + (L.noImage ? ' · 이미지 숨김' : '') +
       (L.overlayOff || snap.item?.noBroadcast ? ' · 방송 자막 꺼짐' : '');
+    // 글자가 없는 장(이미지·PDF·PPT·HTML·유튜브)은 무엇인지 짧게 표시
+    const txt = x => {
+      const t = String(x?.text || '').trim();
+      if (t) return esc(t).replace(/\n/g, '<br>');
+      if (!x) return '';
+      return `<span class="wc-st-note">${ytId(x) ? '▶ 유튜브' : isHtml(x) ? '🧩 HTML 화면' : x.bg ? '🖼 이미지 장' : '(빈 화면)'}</span>`;
+    };
     return `<div class="wc-layer wc-stage">
       <div class="wc-st-top"><span>${esc(snap.item?.title || '대기')}</span><span>${snap.item ? `${L.index + 1} / ${snap.item.count}` : ''}</span><span class="wc-st-status">${status}</span><span class="wc-clock">${now}</span></div>
-      <div class="wc-st-cur" dir="auto">${esc(s?.text || '').replace(/\n/g, '<br>')}${s?.ref ? `<div class="wc-st-ref">${esc(s.ref)}</div>` : ''}</div>
-      <div class="wc-st-next"><b>다음</b> ${esc(n?.text || '— 끝 —').replace(/\n/g, ' / ')}</div>
+      <div class="wc-st-cur" dir="auto"><div class="wc-st-label">지금</div><div class="wc-st-body">${txt(s)}${s?.ref ? `<div class="wc-st-ref">${esc(s.ref)}</div>` : ''}</div></div>
+      <div class="wc-st-next" dir="auto"><div class="wc-st-label">다음</div><div class="wc-st-body">${n ? txt(n) : '<span class="wc-st-note">— 끝 —</span>'}</div></div>
     </div>`;
+  }
+
+  // 프롬프터 글자는 최대한 크게 그린 뒤, 칸을 넘치면 들어갈 때까지 조금씩 줄임 (긴 가사도 잘리지 않게)
+  function fitStage(layer) {
+    for (const b of layer.querySelectorAll('.wc-st-body')) {
+      const row = b.parentElement, cs = getComputedStyle(row);
+      const avail = row.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+      let px = parseFloat(getComputedStyle(b).fontSize), min = px * 0.3;
+      while ((b.scrollHeight > avail + 1 || b.scrollWidth > b.clientWidth + 1) && px > min) { px *= 0.95; b.style.fontSize = px + 'px'; }
+    }
   }
 
   const RENDER = { main: mainHTML, overlay: overlayHTML, stage: stageHTML };
@@ -280,6 +297,7 @@
     if (fade) layer.style.opacity = 0;
     const olds = [...container.querySelectorAll(':scope > .wc-layer')];
     container.appendChild(layer);
+    if (mode === 'stage') fitStage(layer);
     const frames = [...layer.querySelectorAll('iframe.wc-html')];
     // 불러오는 사이에 장이 바뀌었을 수 있으니, 다 불러온 뒤 지금 장을 한 번 더 알려 줌
     frames.forEach(f => { f._wcPage = page; f.addEventListener('load', () => postPage(f)); });
